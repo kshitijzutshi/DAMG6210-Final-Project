@@ -1,0 +1,7 @@
+1. changed the city, state in rental location to enum -> varchar
+
+=============================================================
+
+Note:
+
+* Need to decide the ENUM values whereever they are and replace the ENUM to varchar with check constraint
