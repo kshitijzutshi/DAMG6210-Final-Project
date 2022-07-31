@@ -60,3 +60,7 @@ field where the line starts
 
 ● Specify which table is on the many sides of the relationship by placing a crow's feet
 symbol next to the field where the line ends.
+
+## ERD Diagram
+
+![DAMG6210-Assignment2-FinalERD](https://user-images.githubusercontent.com/13203059/182037072-7c3eea8b-3325-454d-8ce0-07936e2c20b3.png)
