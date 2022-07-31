@@ -64,3 +64,13 @@ symbol next to the field where the line ends.
 ## ERD Diagram
 
 ![DAMG6210-Assignment2-FinalERD](https://user-images.githubusercontent.com/13203059/182037072-7c3eea8b-3325-454d-8ce0-07936e2c20b3.png)
+
+## Database Implementation Requirements
+
+Each team will submit the ‘SQL code’ to implement the database design as well as enter a minimal amount of data (at least 10 rows for each table) using the SQL INSERT scripts, Data Import Wizard, and/or stored procedures. Specific objects to be reflected in the code include the database, tables, data types, primary and foreign keys, and views. Each team is expected to create at least 2 views (often used for reporting purposes).
+
+The implementation must include at least two of the following three items:
+
+- Table-level CHECK Constraints based on a function
+- Computed Columns based on a function
+- Column Data Encryption
