@@ -390,4 +390,4 @@ CREATE TABLE CustomerService (
 -- trigger when inprogrss, get meterrating - completed
 -- rentalamount - computed column
 -- reduce miles for carmaintenance entity
--- create function -- actualendtime - bookingendtime or meterend - metertart * pricepermile
+-- create function -- actualendtime - bookingendtime or meterend - metertart * pricepermile 
