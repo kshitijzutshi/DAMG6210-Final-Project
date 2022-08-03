@@ -733,6 +733,7 @@ VALUES
 GO
 SET IDENTITY_INSERT Team6.dbo.CardDetails OFF;
 
+
 GO
 SET IDENTITY_INSERT Team6.dbo.Car ON;
 -- NOT ADDED -> CarTierID , CAR TYPE, IS AVILABLE
@@ -769,6 +770,49 @@ VALUES
 (7808, 2005, '2018-08-08 05:36:15.113', 5009, 56500.50),
 (7809, 2004, '2014-03-09 08:36:10.103', 5010, 23500.50);
 SET IDENTITY_INSERT Team6.dbo.VendorTransactions OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.CustomerMembership ON;
+GO
+INSERT INTO Team6.dbo.CustomerMembership(CustomerMembershipID, StartDate, isactive , CustomerID, MembershipID) 
+VALUES
+(1000, '2022-05-01', 1,100, 104),
+(1001, '2022-06-06', 1,101, 101),
+(1002, '2022-02-12', 1,102, 106),
+(1003, '2012-07-03', 1,103, 103),
+(1004, '2021-08-07', 1,104, 107),
+(1005, '2022-09-07', 1,105, 105),
+(1006, '2022-02-02', 1,106, 108),
+(1007, '2022-01-03', 1,107, 104),
+(1008, '2022-08-08', 1,108, 108),
+(1009, '2022-03-09', 1,109, 109);
+SET IDENTITY_INSERT Team6.dbo.CustomerMembership OFF;
+
+
+GO
+SET IDENTITY_INSERT Team6.dbo.VendorTransactions ON;
+INSERT INTO CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CreatedTime, CloseTime, BookingId, EmployeeId) VALUES
+  (9001,'Registered',2, 'Unable to book car for given date', 'What advantage is there in booking directly with an airline rather than through an agent? I have almost always booked with the airline but now have an agent whose price is around $50 cheaper than airline and airline does not have price match.
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 1, getdate()), ,1000),
+  (9003,'Registered',2, 'Card not working ending 6788', 'Does anyone know where Id find estimated prices from Atlanta. My vacation destination is up in the air at this point and Im flexible so Id like to find a listing of places that are cheap to fly. Mexico, carribean, central american are all good choices. Thanks in advance.
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 2, getdate()), ,1001),
+  (9004,'In-Progress',7, 'No car model available', 'Last night a guy travelling alone was moved from his seat into an exit row before takeoff.
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 4, getdate()), ,1002),
+  (9000,'In-Progress',9, 'Car rental price not available!', 'Next week we are off to Tunisia with Thomas Cook. . I know times are hard, but why do these companies insult our intelligence by claiming that the latest penny-pinching reduction in service is an â€œimprovementâ€? Geoff
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 5, getdate()), ,1003),
+  (9002,'Closed',5, 'Is MX300 disable friendly?', 'Evening Just wondered if anyone had a valid discount code for the terminal 2 meet and greet parking. Thanks
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 1, getdate()), , 1004),
+  (9004,'Closed',9, 'What is the make year for H1000?', 'Hi, As information to those who are frequent AA or One World alliance passengers and fly to/from/via LAX and Shanghai. 
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 2, getdate()), , 1005),
+  (9004,'Registered',4, 'Customer name not showing in booking', 'Just a heads up for my fellow TripAdvisior travelers: Delta "Partners" with Alitalia out of Rome. 
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 7, getdate()), , 1006),
+  (9003,'Registered',10, 'Unable to add card details', 'Can anyone help us decide on which card gives the most bang for your buck with regard to frequent flier miles. Wed like to be able to take advantage of using a credit card to accumulate miles to offset our air travel costs.
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 4, getdate()), , 1007),
+  (9000,'In-Progress',9, 'Payment gateway error', 'I have heard that today travel companies have been informed that the Thompson Dreamliner from UK will not operate until late this year or, next year. Bookings for this aircraft now seem not to be available for 2013.
+', CURRENT_TIMESTAMP,DATEADD(HOUR, 7, getdate()), , 1008),
+  (9009,'In-Progress',0, 'How to do Advanced booking?', 'There always seems to be scatch cards coming around on the package tour planes where we are told a percentage goes to a charity but does anybody know what percentage is actually given to the charity
+', CURRENT_TIMESTAMP, DATEADD(HOUR, 8, getdate()), , 1009);
+SET IDENTITY_INSERT Team6.dbo.VendorTransactions ON;
 
 -- SELECT STATEMENTs
 SELECT * from Employee;
