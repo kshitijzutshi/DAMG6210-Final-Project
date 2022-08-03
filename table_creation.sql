@@ -886,7 +886,7 @@ UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY
 FROM Bookings
 WHERE BookingID=3000; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), MeterEnd=10700
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), BookingRating = 4, MeterEnd=10700
 FROM Bookings
 WHERE BookingID=3000;
 
@@ -898,7 +898,7 @@ UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY
 FROM Bookings
 WHERE BookingID=3001; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), MeterEnd=1520
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=1520
 FROM Bookings
 WHERE BookingID=3001;
 
@@ -914,7 +914,7 @@ UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY
 FROM Bookings
 WHERE BookingID=3003; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 5 , CURRENT_TIMESTAMP)), MeterEnd=15400
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 5 , CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=15400
 FROM Bookings
 WHERE BookingID=3003;
 
@@ -926,7 +926,7 @@ UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY
 FROM Bookings
 WHERE BookingID=3004; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), MeterEnd=20380
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=20380
 FROM Bookings
 WHERE BookingID=3004;
 
@@ -958,6 +958,215 @@ INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, 
 VALUES
 (3010, 107, 'Booked', DATEADD(DAY, 3, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 3, CURRENT_TIMESTAMP)), 5007);
 
+
+
+
+	-- CAR ID 5008
+
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3009, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5010);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3009; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+FROM Bookings
+WHERE BookingID=3009;
+
+
+-----------------------------------
+
+
+GO
+SET IDENTITY_INSERT Team6.dbo.Bookings ON;
+GO
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3011, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5008);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3011; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+FROM Bookings
+WHERE BookingID=3011;
+
+--------------------------------------
+
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3012, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5009);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3012; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+FROM Bookings
+WHERE BookingID=3012;
+
+----------------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3013, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5008);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3013; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 4, MeterEnd=1530
+FROM Bookings
+WHERE BookingID=3013;
+
+--------------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3014, 109, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5009);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3014; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 8, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1556
+FROM Bookings
+WHERE BookingID=3014;
+
+------------------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3015, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5008);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3015; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=1520
+FROM Bookings
+WHERE BookingID=3015;
+
+--------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3016, 103, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5008);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3016; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+FROM Bookings
+WHERE BookingID=3016;
+
+---------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3017, 103, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3017; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 2, MeterEnd=1545
+FROM Bookings
+WHERE BookingID=3017;
+
+-------------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3018, 103, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3018; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 4, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1542
+FROM Bookings
+WHERE BookingID=3018;
+
+-------------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3019, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5005);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3019; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 4, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1542
+FROM Bookings
+WHERE BookingID=3019;
+
+------------------------------------------------
+
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3020, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5005);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3020; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=1548
+FROM Bookings
+WHERE BookingID=3020;
+
+-----------------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3021, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5005);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3021; 
+
+--UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), MeterEnd=1548
+--FROM Bookings
+--WHERE BookingID=3021;
+
+---------------------------------------------
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3022, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3022; 
+
+--UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), MeterEnd=1548
+--FROM Bookings
+--WHERE BookingID=3021;
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3023, 105, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3023; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1548
+FROM Bookings
+WHERE BookingID=3023;
+
+
+
+SELECT * FROM Bookings
+
 GO
 SET IDENTITY_INSERT Team6.dbo.Bookings OFF;
 
@@ -973,7 +1182,7 @@ INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueT
   (9004,'In-Progress',7, 'No car model available', 'Last night a guy travelling alone was moved from his seat into an exit row before takeoff.
 ', DATEADD(HOUR, 4, getdate()), 3002,1002);
 INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
-  (9002,'In-Progress',9, 'Car rental price not available!', 'Next week we are off to Tunisia with Thomas Cook. . I know times are hard, but why do these companies insult our intelligence by claiming that the latest penny-pinching reduction in service is an â€œimprovementâ€? Geoff
+  (9002,'In-Progress',9, 'Car rental price not available!', 'Next week we are off to Tunisia with Thomas Cook. . I know times are hard, but why do these companies insult our intelligence by claiming that the latest penny-pinching reduction in service is an Ã¢â‚¬Å“improvementÃ¢â‚¬Â�? Geoff
 ', DATEADD(HOUR, 5, getdate()), 3003,1003);
 INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
   (9005,'Closed',5, 'Is MX300 disable friendly?', 'Evening Just wondered if anyone had a valid discount code for the terminal 2 meet and greet parking. Thanks
