@@ -16,6 +16,15 @@ ENCRYPTION BY CERTIFICATE TestCertificate;
 OPEN SYMMETRIC KEY randomkey 
 DECRYPTION BY CERTIFICATE TestCertificate;
 
+-- Close the symmetric key
+CLOSE SYMMETRIC KEY randomkey;
+-- Drop the symmetric key
+DROP SYMMETRIC KEY randomkey;
+-- Drop the certificate
+DROP CERTIFICATE TestCertificate;
+--Drop the DMK
+DROP MASTER KEY;
+
 -- housekeeping
 
 --DROP FUNCTION 
@@ -33,28 +42,6 @@ CASE
 END
 	RETURN @ISVALID
 END;
-
-CREATE FUNCTION ValidateEmail(@Email VARCHAR(100))
-RETURNS bit as
-BEGIN     
-  DECLARE @bitEmailVal as Bit
-  DECLARE @EmailText varchar(100)
-
-  SET @EmailText=ltrim(rtrim(isnull(@EMAIL,'')))
-
-  SET @bitEmailVal = case when @EmailText = '' then 0
-                          when @EmailText like '% %' then 0
-                          when @EmailText like ('%["(),:;<>\]%') then 0
-                          when substring(@EmailText,charindex('@',@EmailText),len(@EmailText)) like ('%[!#$%&*+/=?^`_{|]%') then 0
-                          when (left(@EmailText,1) like ('[-_.+]') or right(@EmailText,1) like ('[-_.+]')) then 0                                                                                    
-                          when (@EmailText like '%[%' or @EmailText like '%]%') then 0
-                          when @EmailText LIKE '%@%@%' then 0
-                          when @EmailText NOT LIKE '_%@_%._%' then 0
-                          else 1 
-                      end
-  RETURN @bitEmailVal
-END;
-
 
 CREATE FUNCTION CalculateAge(@DOB DATE)
 RETURNS INT 
@@ -105,23 +92,24 @@ RETURN @cartype;
 END;
 
 
-create FUNCTION dbo.checkPrimaryCard(@CustomerID INT)
+CREATE FUNCTION dbo.checkPrimaryCard(@CustomerID INT)
 returns INT
 AS
 BEGIN
 	DECLARE @flag INT = 0;
 
-	if EXISTS (SELECT
+	SET @flag = CASE 	
+		WHEN EXISTS (SELECT
 			*
 		FROM CardDetails
 		WHERE CustomerID = @CustomerID
-		AND IsPrimary = 1)
-	BEGIN
-		SET @flag = 1
-	end
+		AND IsPrimary = 1) THEN 1
+		ELSE 0
+	END
 	return @flag
 END;
 
+ 
 
 CREATE FUNCTION dbo.checkavailability(@CarID int)
 returns BIT
@@ -201,13 +189,17 @@ BEGIN
 END;
 
 -- TRIGGERS
-CREATE TRIGGER dbo.SET_UPDATEDATE ON UserAuth AFTER UPDATE AS BEGIN
-UPDATE UserAuth
-SET UpdatedAt = CURRENT_TIMESTAMP;
+CREATE TRIGGER dbo.SET_UPDATEDATE 
+ON UserAuth 
+AFTER UPDATE 
+AS 
+BEGIN
+	UPDATE UserAuth
+	SET UpdatedAt = CURRENT_TIMESTAMP;
 END;
 
 
--- change it to insert as maintenanceid is auto inc primary key (should be composite key)
+
 CREATE TRIGGER dbo.ResetCarMaintenance -- edit - include carid, only after update on service date
 ON CarMaintenance
 AFTER INSERT
@@ -255,7 +247,7 @@ WHERE ServiceID = @serid
 END;
 END;
 
-ALTER TRIGGER dbo.UpdateBookingsTable
+CREATE TRIGGER dbo.UpdateBookingsTable
 ON dbo.Bookings
 AFTER INSERT, UPDATE
 AS
@@ -277,6 +269,10 @@ DECLARE @extratime DATETIME;
 DECLARE @extratimepenalty DECIMAL;
 DECLARE @ActualEndTime DATETIME;
 DECLARE @penalty DECIMAL = 0;
+DECLARE @custid int;
+DECLARE @rentalamount DECIMAL;
+DECLARE @cardid int;
+DECLARE @paymentid int;
 
 SELECT
 	@bookid = b.BookingID
@@ -286,6 +282,11 @@ FULL JOIN deleted d
 
 SELECT
 	@status = Status
+FROM Bookings
+WHERE BookingID = @bookid
+
+SELECT
+	@custid = CustomerID
 FROM Bookings
 WHERE BookingID = @bookid
 
@@ -364,18 +365,22 @@ SET @allocatedmiles = @maxmilesperhr * (@bookingend - @bookingstart)
 		SET @penalty = @penalty + @extratimepenalty
 			END
 
-		UPDATE Bookings
-		SET Penalty = @penalty
-		FROM Bookings
+		UPDATE Bookings SET Penalty = @penalty FROM Bookings 
 		WHERE BookingID = @bookid
 		END
+
+		UPDATE Payment
+		SET BillingAmount = @rentalamount + @penalty,
+			ProcessedAt = CURRENT_TIMESTAMP,
+			PaymentStatus = 'COMPLETED'
+		WHERE PaymentID = @paymentid
 
 	ELSE
 		IF @status = 'InProgress'
 			BEGIN
 				UPDATE Bookings
 				SET MeterStart = @meterrating
-				WHERE CarID = @carid
+				WHERE CarID = @carid and BookingID = @bookid;
 
 				UPDATE RentalLocation
 				SET CurrentCapacity = CurrentCapacity - 1
@@ -387,11 +392,24 @@ SET @allocatedmiles = @maxmilesperhr * (@bookingend - @bookingstart)
 
 	IF @status = 'Booked'
 		BEGIN
-		UPDATE Bookings
-		SET RentalAmount = CAST((DATEPART(HOUR, BookingEndTime) - DATEPART(HOUR, BookingStartTime)) AS DECIMAL) * ct.PricePerHour
-		FROM Bookings b, Car c, CarTier ct
-		WHERE b.CarID = c.CarID
-		AND c.CarTierID = ct.CarTierID
+			select @rentalamount = (CAST((DATEPART(HOUR, b.BookingEndTime) - DATEPART(HOUR, b.BookingStartTime)) AS DECIMAL) * ct.PricePerHour)
+				FROM Bookings b, Car c, CarTier ct
+				WHERE b.BookingID = @bookid 
+					and b.CarID = c.CarID
+					AND c.CarTierID = ct.CarTierID
+			
+			UPDATE Bookings
+			SET RentalAmount = @rentalamount
+			WHERE BookingID = @bookid
+
+			SELECT @cardid = CardID from CardDetails WHERE CustomerID = @custid
+
+			INSERT INTO Payment VALUES(@cardid, @rentalamount, CURRENT_TIMESTAMP, 'PENDING')
+			SELECT @paymentid = Scope_Identity()
+
+			UPDATE Bookings
+			set PaymentId = @paymentid
+			WHERE BookingID = @bookid
 		END
 END;
 
@@ -488,7 +506,7 @@ CREATE TABLE CardDetails (
    ,IsPrimary BIT
    ,CustomerID INT NOT NULL REFERENCES Customer (CustomerID)
    ,CONSTRAINT cardExpiryCheck CHECK (ExpiryDate > DATEADD(MONTH, 6, CURRENT_TIMESTAMP))
-   ,CONSTRAINT checkprimary CHECK (dbo.checkPrimaryCard(CustomerID) = 0)
+   --,CONSTRAINT checkprimary CHECK (dbo.checkPrimaryCard(CustomerID) = 0)
 );
 
 -- unique together on CardNumber and CustomerID 
@@ -537,7 +555,7 @@ CREATE TABLE Car (
 
 CREATE TABLE CarMaintenance (
 	MaintenanceID INT IDENTITY NOT NULL PRIMARY KEY
-   ,ServiceDate DATETIME NOT NULL
+   ,ServiceDate as CURRENT_TIMESTAMP
    ,DueDate DATETIME
    ,DueMiles INT
    ,CarID INT NOT NULL REFERENCES Car (CarID)
@@ -602,7 +620,21 @@ DROP TABLE UserAuth;
 DROP TABLE Employee;
 DROP TABLE Membership;
 
-DELETE FROM Membership
+DELETE FROM Membership;
+DELETE FROM Employee;
+DELETE FROM UserAuth;
+DELETE FROM RentalLocation;
+DELETE FROM Vendor;
+DELETE FROM CarTier;
+DELETE FROM Customer;
+DELETE FROM CardDetails;
+DELETE from Payment;
+DELETE FROM CustomerMembership;
+DELETE FROM Car;
+DELETE FROM CarMaintenance;
+DELETE FROM VendorTransactions;
+DELETE FROM Bookings;
+DELETE FROM CustomerService;
 
 -- INSERT STATEMENTS
 SET IDENTITY_INSERT Team6.dbo.Membership ON;
@@ -694,7 +726,16 @@ SET IDENTITY_INSERT Team6.dbo.Vendor OFF;
 GO
 SET IDENTITY_INSERT Team6.dbo.CarTier ON;
 GO
-insert into Team6.dbo.CarTier (CarTierID, TierName, PricePerHour, BasicInsurance, PricePerMile, CollisionCoverage, BodyCoverage, MedicalCoverage)values(1000, 'Hatchback', 15.00,30.00,8.00,1000.00,450.00,500.00),(1001, 'Sedan', 17.00,35.00,12.00,1050.00,470.00,520.00),(1002, 'MPV', 19.00,40.00,16.00,1100.00,500.00,550.00),(1003, 'SUV', 21.00,45.00,20.00,1150.00,550.00,600.00),(1004, 'Crossover',23.00,50.00,24.00,1200.00,600.00,650.00),(1005, 'Sedan',24.00,55.00,28.00,1250.00,650.00,700.00),(1006, 'Coupe',27.00,60.00,32.00,1300.00,700.00,750.00),(1007, 'Convertible',65.00, 60.00,36.00,1350.00,750.00,800.00);
+insert into Team6.dbo.CarTier (CarTierID, TierName, PricePerHour, BasicInsurance, PricePerMile, CollisionCoverage, BodyCoverage, MedicalCoverage)
+values
+(1000, 'Hatchback', 15.00,30.00,8.00,1000.00,450.00,500.00),
+(1001, 'Sedan', 17.00,35.00,12.00,1050.00,470.00,520.00),
+(1002, 'MPV', 19.00,40.00,16.00,1100.00,500.00,550.00),
+(1003, 'SUV', 21.00,45.00,20.00,1150.00,550.00,600.00),
+(1004, 'Crossover',23.00,50.00,24.00,1200.00,600.00,650.00),
+(1005, 'Sedan',24.00,55.00,28.00,1250.00,650.00,700.00),
+(1006, 'Coupe',27.00,60.00,32.00,1300.00,700.00,750.00),
+(1007, 'Convertible',65.00, 60.00,36.00,1350.00,750.00,800.00);
 GO
 SET IDENTITY_INSERT Team6.dbo.CarTier OFF;
 
@@ -730,13 +771,13 @@ VALUES
   (7008,'Sage Melton','May 01,2024', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'116'),EncryptByKey(Key_GUID(N'randomkey'),'4532721623584412'),0, 107),
   (7009,'Yasir Haynes','Dec 28, 2023', 'Debit',EncryptByKey(Key_GUID(N'randomkey'),'528'),EncryptByKey(Key_GUID(N'randomkey'),'4024007112275695'),0, 108),
   (7010,'Oren Sargent','Oct 11, 2023', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'524'),EncryptByKey(Key_GUID(N'randomkey'),'4539652722474333'),0, 109);
+  --(7011,'Oren Sargent','Oct 11, 2023', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'524'),EncryptByKey(Key_GUID(N'randomkey'),'453923452722474333'),1, 109);
 GO
 SET IDENTITY_INSERT Team6.dbo.CardDetails OFF;
 
 
 GO
 SET IDENTITY_INSERT Team6.dbo.Car ON;
--- NOT ADDED -> CarTierID , CAR TYPE, IS AVILABLE
 GO
 INSERT INTO Team6.dbo.Car(CarID, Model, Make, Color, CarTierID, ManufacturingYear, SeatCapacity, 
 	InsuranceStatus, isAvailable, RegistrationNumber, DisableFriendly, RentalLocationID, MeterRating, VendorID)
@@ -790,8 +831,8 @@ SET IDENTITY_INSERT Team6.dbo.CustomerMembership OFF;
 
 
 GO
-SET IDENTITY_INSERT Team6.dbo.VendorTransactions ON;
-INSERT INTO CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CreatedTime, CloseTime, BookingId, EmployeeId) VALUES
+SET IDENTITY_INSERT Team6.dbo.CustomerService ON;
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CreatedTime, CloseTime, BookingId, EmployeeId) VALUES
   (9001,'Registered',2, 'Unable to book car for given date', 'What advantage is there in booking directly with an airline rather than through an agent? I have almost always booked with the airline but now have an agent whose price is around $50 cheaper than airline and airline does not have price match.
 ', CURRENT_TIMESTAMP,DATEADD(HOUR, 1, getdate()), ,1000),
   (9003,'Registered',2, 'Card not working ending 6788', 'Does anyone know where Id find estimated prices from Atlanta. My vacation destination is up in the air at this point and Im flexible so Id like to find a listing of places that are cheap to fly. Mexico, carribean, central american are all good choices. Thanks in advance.
@@ -812,10 +853,37 @@ INSERT INTO CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, Issu
 ', CURRENT_TIMESTAMP,DATEADD(HOUR, 7, getdate()), , 1008),
   (9009,'In-Progress',0, 'How to do Advanced booking?', 'There always seems to be scatch cards coming around on the package tour planes where we are told a percentage goes to a charity but does anybody know what percentage is actually given to the charity
 ', CURRENT_TIMESTAMP, DATEADD(HOUR, 8, getdate()), , 1009);
+SET IDENTITY_INSERT Team6.dbo.CustomerService ON;
+
+GO
 SET IDENTITY_INSERT Team6.dbo.VendorTransactions ON;
+GO
+INSERT INTO CarMaintenance()
+GO
+SET IDENTITY_INSERT Team6.dbo.VendorTransactions OFF;
 
 -- SELECT STATEMENTs
+SELECT * from Bookings;
+SELECT * from Car;
+SELECT * from CardDetails;
+SELECT * from CarMaintenance;
+SELECT * from CarTier;
+SELECT * from Customer;
+SELECT * from CustomerMembership;
+SELECT * from CustomerService;
 SELECT * from Employee;
+SELECT * from Membership;
+SELECT * from Payment;
+SELECT * from RentalLocation;
+SELECT * from UserAuth;
+SELECT * from Vendor;
+SELECT * from VendorTransactions;
+
+
+----------------------------------------------------------------------------------------View to get number of cars  available for at a  Rental Location---------------------CREATE VIEW view_NumberOfCarsAvailable	AS	SELECT rl.RentalLocationID , MaxCapacity, 	CurrentCapacity, CAST(rl.StreetName as VARCHAR) + ', ' + CAST(rl.City as VARCHAR) + CAST(rl.State as VARCHAR) + CAST(rl.Zipcode as VARCHAR) as Address, count(c.CarID) as NumberOfCarsAvailable	FROM RentalLocation rl	INNER JOIN Car c	on c.RentalLocationID = rl.RentalLocationID 	Group by rl.RentalLocationID , MaxCapacity, CurrentCapacity
+
+----View for checking number of bookings for a session---- -- this can help car rental business for increasing or decreasing number of bookings being held per time period in order to increase profit
+
 
 -- TODO:
 
@@ -866,3 +934,4 @@ SELECT * from Employee;
 	--NEW TODO
 	-- car
 		-- isavailable change function to trigger
+	-- carddetails - isprimary
