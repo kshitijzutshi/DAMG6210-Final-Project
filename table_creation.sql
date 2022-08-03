@@ -16,9 +16,12 @@ ENCRYPTION BY CERTIFICATE TestCertificate;
 OPEN SYMMETRIC KEY randomkey 
 DECRYPTION BY CERTIFICATE TestCertificate;
 
+-- housekeeping
+
+--DROP FUNCTION 
 -- funtions 
 
-CREATE FUNCTION ValidateEmail(@Email VARCHAR)
+CREATE FUNCTION ValidateEmail(@Email VARCHAR(100))
 RETURNS INT 
 BEGIN
  
@@ -29,6 +32,27 @@ CASE
 	ELSE 0
 END
 	RETURN @ISVALID
+END;
+
+CREATE FUNCTION ValidateEmail(@Email VARCHAR(100))
+RETURNS bit as
+BEGIN     
+  DECLARE @bitEmailVal as Bit
+  DECLARE @EmailText varchar(100)
+
+  SET @EmailText=ltrim(rtrim(isnull(@EMAIL,'')))
+
+  SET @bitEmailVal = case when @EmailText = '' then 0
+                          when @EmailText like '% %' then 0
+                          when @EmailText like ('%["(),:;<>\]%') then 0
+                          when substring(@EmailText,charindex('@',@EmailText),len(@EmailText)) like ('%[!#$%&*+/=?^`_{|]%') then 0
+                          when (left(@EmailText,1) like ('[-_.+]') or right(@EmailText,1) like ('[-_.+]')) then 0                                                                                    
+                          when (@EmailText like '%[%' or @EmailText like '%]%') then 0
+                          when @EmailText LIKE '%@%@%' then 0
+                          when @EmailText NOT LIKE '_%@_%._%' then 0
+                          else 1 
+                      end
+  RETURN @bitEmailVal
 END;
 
 
@@ -70,9 +94,9 @@ RETURN @MemCost
 END;
 
 CREATE FUNCTION getCarType(@CarTierID INT)
-RETURNS VARCHAR 
+RETURNS VARCHAR (40)
 BEGIN
-	DECLARE @cartype varchar;
+	DECLARE @cartype varchar(40);
 SELECT
 	@cartype = TierName
 FROM CarTier
@@ -88,15 +112,15 @@ BEGIN
 	DECLARE @flag INT = 0;
 
 	if EXISTS (SELECT
-		*
-	FROM CardDetails
-	WHERE CustomerID = @CustomerID
-	AND IsPrimary = 1)
-BEGIN
-SET @flag = 1
+			*
+		FROM CardDetails
+		WHERE CustomerID = @CustomerID
+		AND IsPrimary = 1)
+	BEGIN
+		SET @flag = 1
 	end
 	return @flag
-END
+END;
 
 
 CREATE FUNCTION dbo.checkavailability(@CarID int)
@@ -107,7 +131,7 @@ BEGIN
 	DECLARE @starttime DATETIME;
 	DECLARE @endtime DATETIME;
 	DECLARE @isavailable BIT;
-	DECLARE @status VARCHAR;
+	DECLARE @status VARCHAR(100);
 
 SELECT
 	@bookid = BookingID
@@ -141,7 +165,7 @@ SET @isavailable = 0
 	end
 
 	RETURN @isavailable
-END
+END;
 
 CREATE FUNCTION dbo.calculateBillingAmount(@PaymentID INT)
 returns DECIMAL
@@ -161,7 +185,20 @@ FROM Bookings
 WHERE BookingID = @bookid
 
 RETURN @sum
-END
+END;
+
+CREATE FUNCTION dbo.getMeterRating(@CarID INT)
+RETURNS INT 
+AS
+BEGIN
+	DECLARE @meterrating int;
+
+	SELECT @meterrating = MeterRating
+	from Car
+	where Car = @carid
+
+	RETURN @meterrating
+END;
 
 -- TRIGGERS
 CREATE TRIGGER dbo.SET_UPDATEDATE ON UserAuth AFTER UPDATE AS BEGIN
@@ -197,7 +234,7 @@ ON dbo.CustomerService
 AFTER UPDATE
 AS
 BEGIN
-DECLARE @status VARCHAR;
+DECLARE @status VARCHAR(100);
 DECLARE @serid INT;
 SELECT
 	@status = cs1.ComplaintStatus
@@ -223,7 +260,7 @@ ON dbo.Bookings
 AFTER INSERT, UPDATE
 AS
 BEGIN
-DECLARE @status VARCHAR;
+DECLARE @status VARCHAR(100);
 DECLARE @bookid INT;
 DECLARE @meterend INT;
 DECLARE @meterstart INT;
@@ -299,63 +336,63 @@ SET @allocatedmiles = @maxmilesperhr * (@bookingend - @bookingstart)
 	BEGIN
 
 
-UPDATE Car
-SET MeterRating = MeterRating + (@meterend - @meterstart)
-WHERE CarID = @carid
+		UPDATE Car
+		SET MeterRating = MeterRating + (@meterend - @meterstart)
+		WHERE CarID = @carid
 
-UPDATE CarMaintenance
-SET DueMiles = DueMiles - (@meterend - @meterstart)
-WHERE CarID = @carid
+		UPDATE CarMaintenance
+		SET DueMiles = DueMiles - (@meterend - @meterstart)
+		WHERE CarID = @carid
 
-IF @totalmiles > @allocatedmiles
-BEGIN
-SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT
-		ct.PricePerMile
-	FROM Car c
-		,CarTier ct
-	WHERE ct.CarTierID = c.CarTierID)
+		IF @totalmiles > @allocatedmiles
+		BEGIN
+		SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT
+				ct.PricePerMile
+			FROM Car c
+				,CarTier ct
+			WHERE ct.CarTierID = c.CarTierID)
+					END
+				IF @ActualEndTime > @bookingend
+					BEGIN
+		SET @extratime = @ActualEndTime - @bookingend
+		SET @extratimepenalty = CAST(DATEPART(HOUR, @extratime) AS DECIMAL) * (SELECT
+				PricePerHour
+			FROM Car c
+				,CarTier ct
+			WHERE ct.CarTierID = c.CarTierID)
+
+		SET @penalty = @penalty + @extratimepenalty
 			END
-		IF @ActualEndTime > @bookingend
+
+		UPDATE Bookings
+		SET Penalty = @penalty
+		FROM Bookings
+		WHERE BookingID = @bookid
+		END
+
+	ELSE
+		IF @status = 'InProgress'
 			BEGIN
-SET @extratime = @ActualEndTime - @bookingend
-SET @extratimepenalty = CAST(DATEPART(HOUR, @extratime) AS DECIMAL) * (SELECT
-		PricePerHour
-	FROM Car c
-		,CarTier ct
-	WHERE ct.CarTierID = c.CarTierID)
+				UPDATE Bookings
+				SET MeterStart = @meterrating
+				WHERE CarID = @carid
 
-SET @penalty = @penalty + @extratimepenalty
+				UPDATE RentalLocation
+				SET CurrentCapacity = CurrentCapacity - 1
+				WHERE RentalLocationID = (SELECT
+						RentalLocationID
+				FROM Car
+				WHERE CarID = @carid)
 			END
 
-UPDATE Bookings
-SET Penalty = @penalty
-FROM Bookings
-WHERE BookingID = @bookid
-END
-
-ELSE
-IF @status = 'InProgress'
-BEGIN
-UPDATE Bookings
-SET MeterStart = @meterrating
-WHERE CarID = @carid
-
-UPDATE RentalLocation
-SET CurrentCapacity = CurrentCapacity - 1
-WHERE RentalLocationID = (SELECT
-		RentalLocationID
-	FROM Car
-	WHERE CarID = @carid)
-END
-
-IF @status = 'Booked'
-BEGIN
-UPDATE Bookings
-SET RentalAmount = CAST((DATEPART(HOUR, BookingEndTime) - DATEPART(HOUR, BookingStartTime)) AS DECIMAL) * ct.PricePerHour
-FROM Bookings b, Car c, CarTier ct
-WHERE b.CarID = c.CarID
-AND c.CarTierID = ct.CarTierID
-END
+	IF @status = 'Booked'
+		BEGIN
+		UPDATE Bookings
+		SET RentalAmount = CAST((DATEPART(HOUR, BookingEndTime) - DATEPART(HOUR, BookingStartTime)) AS DECIMAL) * ct.PricePerHour
+		FROM Bookings b, Car c, CarTier ct
+		WHERE b.CarID = c.CarID
+		AND c.CarTierID = ct.CarTierID
+		END
 END;
 
 -- table creation
@@ -381,8 +418,8 @@ ALTER TABLE Employee ADD CONSTRAINT checkValidEmail CHECK (dbo.ValidateEmail(Ema
 
 CREATE TABLE UserAuth (
 	UserId INT IDENTITY NOT NULL PRIMARY KEY
-   ,Username VARCHAR(20) NOT NULL
-   ,Password VARBINARY
+   ,Username VARCHAR(100) NOT NULL
+   ,Password VARBINARY(300) NOT NULL
    ,CreatedAt DATETIME NOT NULL
    ,UpdatedAt DATETIME
 );
@@ -415,14 +452,13 @@ CREATE TABLE CarTier (
    ,CollisionCoverage DECIMAL(7, 2) NOT NULL
    ,BodyCoverage DECIMAL(7, 2) NOT NULL
    ,MedicalCoverage DECIMAL(7, 2) NOT NULL
-   ,
 );
 
 
 CREATE TABLE Customer (
 	CustomerID INT IDENTITY NOT NULL PRIMARY KEY
    ,FirstName VARCHAR(250) NOT NULL
-   ,MiddleName VARCHAR
+   ,MiddleName VARCHAR(250)
    ,LastName VARCHAR(250) NOT NULL
    ,Age AS dbo.CalculateAge(DateOfBirth)
    ,StreetName VARCHAR(60) NOT NULL
@@ -430,13 +466,13 @@ CREATE TABLE Customer (
    ,State VARCHAR(40) NOT NULL
    ,ZipCode INT NOT NULL
    ,EmailID VARCHAR(40) NOT NULL
-   ,PhoneNumber VARCHAR NOT NULL
+   ,PhoneNumber VARCHAR(30) NOT NULL
    ,DateOfBirth DATE NOT NULL
-   ,LicenseNumber VARCHAR NOT NULL
+   ,LicenseNumber VARCHAR(17) NOT NULL
    ,LicenseExpiry DATE NOT NULL CHECK (LicenseExpiry > DATEADD(MONTH, 6, CURRENT_TIMESTAMP))
    ,IsVerified BIT
    ,UserId INT NOT NULL REFERENCES UserAuth (UserId)
-   ,CONSTRAINT LicenceNumberValidCheck CHECK (LicenseNumber LIKE '^[A-Z](?:\d[- ]*){14}$')
+   --,CONSTRAINT LicenceNumberValidCheck CHECK (LicenseNumber LIKE '^[A-Z](?:\d[- ]*){14}$')
 );
 
 ALTER TABLE Customer ADD CONSTRAINT checkValidEmailCustomer CHECK (dbo.ValidateEmail(EmailID) = 1);
@@ -446,9 +482,9 @@ CREATE TABLE CardDetails (
 	CardID INT IDENTITY NOT NULL PRIMARY KEY
    ,NameOnCard VARCHAR(60) NOT NULL
    ,ExpiryDate DATETIME NOT NULL
-   ,PaymentMethod VARCHAR NOT NULL CHECK ([PaymentMethod] IN ('Credit', 'Debit'))
-   ,CVV INT NOT NULL
-   ,CardNumber VARCHAR(20) NOT NULL
+   ,PaymentMethod VARCHAR(20) NOT NULL CHECK ([PaymentMethod] IN ('Credit', 'Debit'))
+   ,CVV VARBINARY(300) NOT NULL
+   ,CardNumber VARBINARY(300) NOT NULL
    ,IsPrimary BIT
    ,CustomerID INT NOT NULL REFERENCES Customer (CustomerID)
    ,CONSTRAINT cardExpiryCheck CHECK (ExpiryDate > DATEADD(MONTH, 6, CURRENT_TIMESTAMP))
@@ -465,8 +501,7 @@ CREATE TABLE Payment (
    ,CardID INT NOT NULL REFERENCES CardDetails (CardID)
    ,BillingAmount DECIMAL(7, 2) NOT NULL
    ,ProcessedAt DATETIME
-   ,PaymentStatus VARCHAR NOT NULL CHECK ([PaymentStatus] IN ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED'))
-   ,
+   ,PaymentStatus VARCHAR(20) NOT NULL CHECK ([PaymentStatus] IN ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED'))
 );
 
 
@@ -489,10 +524,10 @@ CREATE TABLE Car (
    ,CarTierID INT NOT NULL REFERENCES CarTier (CarTierID)
    ,ManufacturingYear INT NOT NULL
    ,SeatCapacity INT
-   ,InsuranceStatus VARCHAR NOT NULL CHECK ([InsuranceStatus] IN ('ACTIVE', 'EXPIRED'))
+   ,InsuranceStatus VARCHAR(20) NOT NULL CHECK ([InsuranceStatus] IN ('ACTIVE', 'EXPIRED'))
    ,CarType AS dbo.getCarType(CarTierID)
-   ,isAvailable AS dbo.checkavailability(CarID)
-   ,RegistrationNumber VARCHAR NOT NULL
+   ,isAvailable BIT
+   ,RegistrationNumber VARCHAR(20) NOT NULL
    ,DisableFriendly BIT
    ,RentalLocationID INT NOT NULL REFERENCES RentalLocation (RentalLocationID)
    ,MeterRating INT NOT NULL
@@ -522,61 +557,221 @@ CREATE TABLE VendorTransactions (
 CREATE TABLE Bookings (
 	BookingID INT IDENTITY NOT NULL PRIMARY KEY
    ,CustomerID INT NOT NULL REFERENCES Customer (CustomerID)
-   ,Status VARCHAR NOT NULL CHECK ([status] IN ('Cancelled', 'Completed', 'InProgress')) DEFAULT 'Booked'
+   ,Status VARCHAR(30) NOT NULL CHECK ([status] IN ('Cancelled', 'Completed', 'InProgress')) DEFAULT 'Booked'
    ,BookingStartTime DATETIME NOT NULL
    ,BookingEndTime DATETIME NOT NULL
-   ,MeterStart INT
+   ,MeterStart AS dbo.getMeterRating(CarID)
    ,MeterEnd INT
-   ,RentalAmount AS dbo.calculateRentalAmount(CarID)
+   ,RentalAmount DECIMAL(9,2)
    ,Penalty DECIMAL(8, 2)
    ,PaymentId INT REFERENCES Payment (PaymentId)
    ,CarID INT NOT NULL REFERENCES Car (CarID)
    ,ActualStartTime DATETIME
    ,ActualEndTime DATETIME
-   ,BookingRating INTEGER
+   ,BookingRating INT
 );
-
-CREATE FUNCTION dbo.calculateRentalAmount (@CarID INT)
-RETURNS DECIMAL
-AS
-BEGIN
-DECLARE @sum INT = 0;
-DECLARE @maxmilesperhr INT = 30;
-DECLARE @cartierid INT;
-DECLARE @status VARCHAR;
-
-SELECT
-	@cartierid = CarTierID
-FROM Car
-WHERE CarID = @carid
-
-SELECT
-	@status = Status
-FROM Bookings
-WHERE CarID = @carid
-
-IF @status = 'Booked'
-BEGIN
-UPDATE Bookings
-SET RentalAmount = CAST((DATEPART(HOUR, BookingEndTime) - DATEPART(HOUR, BookingStartTime)) AS DECIMAL) * ct.PricePerHour
-FROM Bookings b, Car c, CarTier ct
-WHERE b.CarID = c.CarID
-AND c.CarTierID = ct.CarTierID
-END
-END
 
 CREATE TABLE CustomerService (
 	ServiceID INT IDENTITY NOT NULL PRIMARY KEY
-   ,ComplaintStatus VARCHAR CHECK ([ComplaintStatus] IN ('Registered', 'In-Progress', 'Closed'))
+   ,ComplaintStatus VARCHAR(20) CHECK ([ComplaintStatus] IN ('Registered', 'In-Progress', 'Closed'))
    ,Rating INT
-   ,IssueTitle VARCHAR NOT NULL
-   ,IssueDescription VARCHAR NOT NULL
+   ,IssueTitle VARCHAR(250) NOT NULL
+   ,IssueDescription VARCHAR(1000) NOT NULL
    ,CreatedTime AS CURRENT_TIMESTAMP
    ,CloseTime DATETIME
    ,BookingId INT NOT NULL REFERENCES Bookings (BookingId)
    ,EmployeeId INT NOT NULL REFERENCES Employee (EmployeeId)
 );
 
+-- HouseKeeeping
+USE Team6;
+
+DROP TABLE CustomerService;
+DROP TABLE Bookings;
+DROP TABLE VendorTransactions;
+DROP TABLE CarMaintenance;
+DROP TABLE Car;
+DROP TABLE CustomerMembership;
+DROP TABLE Payment;
+DROP TABLE CardDetails;
+DROP TABLE Customer;
+DROP TABLE CarTier;
+DROP TABLE Vendor;
+DROP TABLE RentalLocation;
+DROP TABLE UserAuth;
+DROP TABLE Employee;
+DROP TABLE Membership;
+
+DELETE FROM Membership
+
+-- INSERT STATEMENTS
+SET IDENTITY_INSERT Team6.dbo.Membership ON;
+GO
+INSERT INTO Team6.dbo.Membership (MembershipID, Duration, Price, Status, MembershipType) 
+values 
+(100, 3, 100.00, 1, 'Standard'),
+(101, 6, 150.00, 1, 'Standard'),
+(102, 12, 200.00, 1, 'Standard'),
+(103, 3, 200.00, 1, 'Premium'),
+(104, 6, 300.00, 1, 'Premium'),
+(105, 12, 350.00, 1, 'Premium'),
+(106, 3, 300.00, 1, 'Executive'),
+(107, 6, 360.00, 1, 'Executive'),
+(108, 12, 400.00, 1, 'Executive'),
+(109, 24,550.00, 1, 'Executive');
+GO
+SET IDENTITY_INSERT Team6.dbo.Membership OFF;
+GO
+SET IDENTITY_INSERT Team6.dbo.Employee ON;
+
+GO
+insert into Team6.dbo.Employee (EmployeeID, FirstName, MiddleName, LastName, Designation, EmailID)
+values
+(1000, 'Raina', 'Suresh', 'Rasu', 'Manager','sureshraina@gmail.com'),
+(1001, 'Kunal', 'Ramesh', 'Ved', 'Customer Service','srk228@gmail.com'),
+(1002, 'Sachin', 'Suresh', 'Sid', 'Front Desk','ssss56@gmail.com'),
+(1003, 'Shweta', 'Billie', 'Kate', 'Front Desk','funman@gmail.com'),
+(1004, 'Naina', 'Shiva', 'Shenoy', 'Manager','killiey@gmail.com'),
+(1005, 'Jane', 'Priya', 'Bina', 'Manager','priya@gmail.com'),
+(1006, 'Raj', 'Vikram', 'Mary', 'Manager','vikram@gmail.com'),
+(1007, 'Karthik', 'R', 'Gopal', 'Front Desk','vik387@gmail.com'),
+(1008, 'Rj', 'Khatari', 'Jose', 'Customer Service','756ram@gmail.com'),
+(1009, 'Isabelle', 'Jerome', 'Josh', 'Customer Service','majo11@gmail.com')
+GO
+SET IDENTITY_INSERT Team6.dbo.Employee OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.UserAuth ON;
+GO
+INSERT INTO dbo.UserAuth (UserId, Username, Password, CreatedAt, UpdatedAt) VALUES 
+(1001, 'NeilDavidson',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1002, 'VictoriaBerry',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1003, 'LeonardMorrison',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1004, 'JackGlover',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1005, 'DeirdrePeake',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1006, 'YvonneDuncan',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1007, 'CarlBower',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1008, 'MaxBrown',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1009, 'AbigailStewart',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1010, 'ConnorKelly',EncryptByKey(Key_GUID(N'randomkey'),'123456789'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+GO
+SET IDENTITY_INSERT Team6.dbo.UserAuth OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.RentalLocation ON;
+GO
+INSERT INTO RentalLocation (RentalLocationID, MaxCapacity, CurrentCapacity, StreetName, City, State, Zipcode) VALUES
+  (3000, 100, 100, '183-3661 Magnis Road','San Diego', 'California', 94156),
+  (3001, 100, 100, '728-9865 Aptent Rd.','Springfield','Boston',10237),
+  (3002, 100, 100, '9040 In Rd.','Wichita','Prince Albert',30238),
+  (3003, 100, 100, 'P.O. Box 881, 5272 Ut St.','West Jordan', 'Townsville',07687),
+  (3004, 100, 100, '312-1840 Nec Road','Augusta', 'Tunja',620841),
+  (3005, 100, 100, 'P.O. Box 631, 163 Luctus Avenue','Spokane', 'Bremen',13145),
+  (3006, 100, 100, 'Ap #413-9706 Lorem. St.','Springfield', 'Gliwice',54138),
+  (3007, 100, 100, '138-418 A, St.','Chattanooga','Kerikeri',87862),
+  (3008, 100, 100, '7988 Eu, Road','West Jordan', 'Gorinchem',87329),
+  (3009, 100, 100, 'P.O. Box 527, 6711 Eu Road','San Diego', 'Te Puke',59921);
+GO
+SET IDENTITY_INSERT Team6.dbo.RentalLocation OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.Vendor ON;
+GO
+INSERT INTO dbo.Vendor(VendorID, Name, IsVerified) VALUES
+(2001, 'TDKMotors', 1),
+(2002, 'SKMotors', 1),
+(2003, 'GDKMotors', 1),
+(2004, 'THKMotors', 1),
+(2005, 'TPKMotors', 1),
+(2006, 'TNTMotors', 1),
+(2007, 'DFEMotors', 1),
+(2008, 'METMotors', 1),
+(2009, 'PowerMotors', 1),
+(2010, 'MPDMotors', 1);
+GO
+SET IDENTITY_INSERT Team6.dbo.Vendor OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.CarTier ON;
+GO
+insert into Team6.dbo.CarTier (CarTierID, TierName, PricePerHour, BasicInsurance, PricePerMile, CollisionCoverage, BodyCoverage, MedicalCoverage)values(1000, 'Hatchback', 15.00,30.00,8.00,1000.00,450.00,500.00),(1001, 'Sedan', 17.00,35.00,12.00,1050.00,470.00,520.00),(1002, 'MPV', 19.00,40.00,16.00,1100.00,500.00,550.00),(1003, 'SUV', 21.00,45.00,20.00,1150.00,550.00,600.00),(1004, 'Crossover',23.00,50.00,24.00,1200.00,600.00,650.00),(1005, 'Sedan',24.00,55.00,28.00,1250.00,650.00,700.00),(1006, 'Coupe',27.00,60.00,32.00,1300.00,700.00,750.00),(1007, 'Convertible',65.00, 60.00,36.00,1350.00,750.00,800.00);
+GO
+SET IDENTITY_INSERT Team6.dbo.CarTier OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.Customer ON;
+GO
+INSERT INTO Team6.dbo.Customer (CustomerID, FirstName, MiddleName, LastName, StreetName, City, State, ZipCode, EmailID, PhoneNumber, DateOfBirth, LicenseNumber, LicenseExpiry, IsVerified, UserId)
+VALUES
+  (100,'Carol','Orli Fry','Murphy','377-8230 Bibendum Street','Dublin','Oxfordshire',21187,'vitae@aol.com','(642) 974-6477','Aug 11, 1978','D6101-40706-60905','Feb 24, 2041',1, 1001),
+  (101,'George','Deirdre Crosby','Hendrix','Ap #389-9346 Cras Ave','Marawi','East Kalimantan',48832,'sociosqu.ad@outlook.couk','1-611-231-7667','Mar 10, 1966','D6341-40706-60342','Jul 31, 2041',1, 1002),
+  (102,'Daria','Stewart Hopper','Slater','P.O. Box 314, 4655 Eu St.','Gimcheon','Puglia',73481,'ultricies.sem@aol.edu','(291) 989-3887','May 23, 1975','F6671-43536-60097','Nov 6, 2040',1, 1003),
+  (103,'Allegra','Dolan Hester','Blackwell','266-7187 Integer Rd.','Forchtenstein','New Brunswick',14727,'tortor@hotmail.couk','(746) 704-7825','Jun 27, 1967','Z6101-40706-60012','Dec 31, 2040',1, 1004),
+  (104,'Vernon','Xander Allison','Davidson','Ap #323-8451 Egestas St.','Skegness','Xinan',51707,'justo@aol.com','1-138-557-3693','Dec 2, 1967','K6101-40706-60523','Jan 7, 2041',1, 1005),
+  (105,'Keane','Jade Haynes','Hamilton','Ap #520-7983 Pellentesque Ave','Anseong','Vastra Gotalands lan',60026,'lobortis.augue.scelerisque@yahoo.ca','1-491-349-9113','Feb 1, 1962','H8101-40706-60082','Jul 24, 2041',1, 1006),
+  (106,'Prescott','Meredith Cross','Schneider','540-1241 Magna. Road','Swat','Sicilia',47862,'nunc.id.enim@protonmail.edu','(426) 779-5386','Feb 5, 1969','M8001-40706-60661','Feb 24, 2041',1, 1007),
+  (107,'Sage','Cameran Reed','Melton','P.O. Box 515, 2511 Sagittis St.','Bad Neuenahr-Ahrweiler','Derbyshire',04352,'pharetra@protonmail.couk','(916) 396-0879','Apr 23, 1973','B9801-40196-25419','May 13, 2041',1, 1008),
+  (108,'Yasir','Shaine Craft','Haynes','P.O. Box 565, 8223 Aliquet Rd.','Barranca','Gilgit Baltistan',70992,'sit@hotmail.com','(320) 751-0213','Jan 2, 1964','X7601-40196-58465','Aug 27, 2040',1, 1009),
+  (109,'Oren','Jerome Eaton','Sargent','9724 Ut Ave','Meppel','Selkirkshire',97956,'at.augue.id@outlook.edu','1-643-775-8358','Aug 20, 1967','C5321-72844-32746','Sep 15, 2040',1, 1010); 
+SET IDENTITY_INSERT Team6.dbo.Customer OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.CardDetails ON;
+GO
+INSERT INTO Team6.dbo.CardDetails(CardID, NameOnCard, ExpiryDate, PaymentMethod, CVV, CardNumber, IsPrimary, CustomerID)
+VALUES
+  (7001,'Carol Murphy','Nov 16, 2023','Credit',EncryptByKey(Key_GUID(N'randomkey'),'795'),EncryptByKey(Key_GUID(N'randomkey'),'4556854473966842'),0, 100),
+  (7002,'George Hendrix','Sep 16, 2023','Credit',EncryptByKey(Key_GUID(N'randomkey'),'991'),EncryptByKey(Key_GUID(N'randomkey'),'4556597422834757'),0, 101),
+  (7003,'Daria Slater','Dec 12,2023', 'Debit',EncryptByKey(Key_GUID(N'randomkey'),'964'),EncryptByKey(Key_GUID(N'randomkey'),'4532845626224435'),0, 102),
+  (7004,'Allegra Blackwell','Feb 01,2024','Credit',EncryptByKey(Key_GUID(N'randomkey'),'643'),EncryptByKey(Key_GUID(N'randomkey'),'4929426823241'),0, 103),
+  (7005,'Vernon Davidson','April 24,2023', 'Debit',EncryptByKey(Key_GUID(N'randomkey'),'823'),EncryptByKey(Key_GUID(N'randomkey'),'4485669344742214'),0, 104),
+  (7006,'Keane Hamilton','Oct 19, 2023', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'638'),EncryptByKey(Key_GUID(N'randomkey'),'4485824236973'),0, 105),
+  (7007,'Prescott Schneider','Nov 26, 2023', 'Debit',EncryptByKey(Key_GUID(N'randomkey'),'481'),EncryptByKey(Key_GUID(N'randomkey'),'4929648576516573'),0, 106),
+  (7008,'Sage Melton','May 01,2024', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'116'),EncryptByKey(Key_GUID(N'randomkey'),'4532721623584412'),0, 107),
+  (7009,'Yasir Haynes','Dec 28, 2023', 'Debit',EncryptByKey(Key_GUID(N'randomkey'),'528'),EncryptByKey(Key_GUID(N'randomkey'),'4024007112275695'),0, 108),
+  (7010,'Oren Sargent','Oct 11, 2023', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'524'),EncryptByKey(Key_GUID(N'randomkey'),'4539652722474333'),0, 109);
+GO
+SET IDENTITY_INSERT Team6.dbo.CardDetails OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.Car ON;
+-- NOT ADDED -> CarTierID , CAR TYPE, IS AVILABLE
+GO
+INSERT INTO Team6.dbo.Car(CarID, Model, Make, Color, CarTierID, ManufacturingYear, SeatCapacity, 
+	InsuranceStatus, isAvailable, RegistrationNumber, DisableFriendly, RentalLocationID, MeterRating, VendorID)
+VALUES
+ (5001, 'MX300', 'HONDA', 'RED', 1000, 2016, 4, 'ACTIVE', 1,'S6J 6E3', 1, 3003, 10500, 2002),
+ (5002, 'CX600', 'KIA', 'WHITE', 1001, 2018, 4, 'ACTIVE', 1,'I5K 9O1', 0, 3001, 1500, 2007),
+ (5003, 'A6000', 'LEXUS', 'BLACK', 1002, 2020, 4, 'ACTIVE', 1,'N6U 5B0', 1, 3005, 15000, 2008),
+ (5004, 'ETIOS', 'TOYOTA', 'BLUE', 1003, 2012, 4, 'ACTIVE', 1,'W8V 7U4', 0, 3006, 8567, 2005),
+ (5005, 'CIVIC', 'HONDA', 'RED', 1004, 2020, 4, 'ACTIVE', 1, 'T4R 7E4', 1, 3007, 20349, 2003),
+ (5006, 'T3000', 'TOYOTA', 'RED', 1005, 2017, 4, 'EXPIRED',  1,'O2M 7Y5', 1, 3008, 25678, 2009),
+ (5007, 'C3000', 'HONDA', 'WHITE', 1006, 2015, 4, 'ACTIVE',  1,'G2X 5E1', 0, 3009, 8000, 2010),
+ (5008, 'INDICA', 'TATA', 'RED', 1007, 2012, 4, 'ACTIVE',  1, 'T8J 1Q5', 1, 3004, 4500, 2006),
+ (5009, 'H1000', 'HONDA', 'BLACK', 1000, 2018, 4, 'ACTIVE',  1,'L1M 2Q9', 1, 3008, 3677, 2005),
+ (5010, 'CITY', 'HONDA', 'BLACK', 1000, 2014, 4, 'ACTIVE',  1,'P5T 9Q8', 0, 3005, 66788, 2004); 
+GO
+SET IDENTITY_INSERT Team6.dbo.Car OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.VendorTransactions ON;
+GO
+INSERT INTO VendorTransactions(VendorTransactionID, VendorID, TransactionTime, CarID, TransactionValue) 
+VALUES
+(7800, 2002, '2016-05-01 12:36:30.123', 5001, 66000.50),
+(7801, 2007, '2018-06-06 08:36:30.113', 5002, 56000.50),
+(7802, 2008, '2020-02-12 06:26:40.163', 5003, 48500.50),
+(7803, 2005, '2012-07-03 02:36:30.173', 5004, 33000.50),
+(7804, 2003, '2020-08-07 12:36:20.123', 5005, 15000.50),
+(7805, 2009, '2017-09-07 02:36:10.183', 5006, 34000.50),
+(7806, 2010, '2015-02-02 12:36:30.163', 5007, 56500.50),
+(7807, 2006, '2012-01-03 07:36:20.193', 5008, 36000.50),
+(7808, 2005, '2018-08-08 05:36:15.113', 5009, 56500.50),
+(7809, 2004, '2014-03-09 08:36:10.103', 5010, 23500.50);
+SET IDENTITY_INSERT Team6.dbo.VendorTransactions OFF;
+
+-- SELECT STATEMENTs
+SELECT * from Employee;
 
 -- TODO:
 
@@ -616,3 +811,14 @@ CREATE TABLE CustomerService (
 
 -- Customer Membership
 -- isactive- false if enddate > curr date
+
+
+-- DATA insertion error
+	-- Carddetails- Customerid - check, unique
+	-- CUSTOMER - Emailid
+	-- Employee - emailid
+
+
+	--NEW TODO
+	-- car
+		-- isavailable change function to trigger
