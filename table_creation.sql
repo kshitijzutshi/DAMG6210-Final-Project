@@ -344,27 +344,39 @@ BEGIN
 			WHERE CarID = @carid
 
 			IF @totalmiles > @allocatedmiles
-				BEGIN
-					SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT ct.PricePerMile FROM Car c,CarTier ct
-						WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
-				END
-			IF @ActualEndTime > @bookingend
-				BEGIN
-					SET @extratime = DATEPART(HOUR,@ActualEndTime) - DATEPART(HOUR,@bookingend)
-					SET @extratimepenalty = @extratime * (SELECT PricePerHour FROM Car c,CarTier ct
-						WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
-					SET @penalty = @penalty + @extratimepenalty
-				END
-
+					BEGIN
+						print '@totalmiles > @allocatedmiles'
+						PRINT @penalty 
+						PRINT @totalmiles
+						PRINT @allocatedmiles
+						DECLARE @temp DECIMAL;
+						SELECT @temp =  ct.PricePerMile FROM Car c,CarTier ct
+									WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID
+						print @temp
+						SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT ct.PricePerMile FROM Car c,CarTier ct
+							WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
+					END
+				print @penalty
+				IF @ActualEndTime > @bookingend
+					BEGIN
+						SET @extratime = DATEPART(HOUR,@ActualEndTime) - DATEPART(HOUR,@bookingend)
+						SET @extratimepenalty = @extratime * (SELECT PricePerHour FROM Car c,CarTier ct
+							WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
+						SET @penalty = @penalty + @extratimepenalty
+					print '@ActualEndTime > @bookingend'
+					print @extratime
+					print @extratimepenalty
+					END
+				print @penalty
 			UPDATE Bookings SET Penalty = @penalty FROM Bookings 
 				WHERE BookingID = @bookid
 		
 	
 			UPDATE Payment
-			SET BillingAmount = (@rentalamount + @penalty),
+			SET BillingAmount = ((SELECT RentalAmount from Bookings WHERE BookingID = @bookid) + @penalty),
 				ProcessedAt = CURRENT_TIMESTAMP,
 				PaymentStatus = 'COMPLETED'
-			WHERE PaymentID = @paymentid
+			WHERE PaymentID = (SELECT PaymentId from Bookings WHERE BookingID = @bookid)
 		END
 
 	IF @status = 'InProgress'
@@ -384,7 +396,7 @@ BEGIN
 		PRINT 'inside trigger'
 	IF @status = 'Booked'
 		BEGIN
-			select @rentalamount = (CAST((DATEPART(HOUR, b.BookingEndTime) - DATEPART(HOUR, b.BookingStartTime)) AS DECIMAL) * ct.PricePerHour)
+			select @rentalamount = (CAST((DATEPART(HOUR, b.BookingEndTime) - DATEPART(HOUR, b.BookingStartTime)) AS DECIMAL) * ct.PricePerHour) + ct.BasicInsurance + ct.CollisionCoverage + ct.BodyCoverage + ct.MedicalCoverage
 				FROM Bookings b, Car c, CarTier ct
 				WHERE b.BookingID = @bookid 
 					and b.CarID = c.CarID
@@ -726,14 +738,14 @@ SET IDENTITY_INSERT Team6.dbo.CarTier ON;
 GO
 insert into Team6.dbo.CarTier (CarTierID, TierName, PricePerHour, BasicInsurance, PricePerMile, CollisionCoverage, BodyCoverage, MedicalCoverage)
 values
-(1000, 'Hatchback', 15.00,30.00,8.00,1000.00,450.00,500.00),
-(1001, 'Sedan', 17.00,35.00,12.00,1050.00,470.00,520.00),
-(1002, 'MPV', 19.00,40.00,16.00,1100.00,500.00,550.00),
-(1003, 'SUV', 21.00,45.00,20.00,1150.00,550.00,600.00),
-(1004, 'Crossover',23.00,50.00,24.00,1200.00,600.00,650.00),
-(1005, 'Sedan',24.00,55.00,28.00,1250.00,650.00,700.00),
-(1006, 'Coupe',27.00,60.00,32.00,1300.00,700.00,750.00),
-(1007, 'Convertible',65.00, 60.00,36.00,1350.00,750.00,800.00);
+(1000, 'Hatchback', 15.00,12.00,8.00,10.00,10.00,10.00),
+(1001, 'Sedan', 17.00,15.00,12.00,11.00,12.00,12.00),
+(1002, 'MPV', 19.00,17.00,16.00,13.00,13.00,13.00),
+(1003, 'SUV', 21.00,19.00,20.00,15.00,14.00,14.00),
+(1004, 'Crossover',23.00,23.00,24.00,17.00,17.00,17.00),
+(1005, 'Sedan',24.00,25.00,25.00,19.00,17.00,17.00),
+(1006, 'Coupe',27.00,27.00,32.00,21.00,18.00,18.00),
+(1007, 'Convertible',29.00, 29.00,26.00,19.00,19.00,19.00);
 GO
 SET IDENTITY_INSERT Team6.dbo.CarTier OFF;
 
@@ -827,32 +839,6 @@ VALUES
 (1009, '2022-03-09', 1,109, 109);
 SET IDENTITY_INSERT Team6.dbo.CustomerMembership OFF;
 
-
-GO
-SET IDENTITY_INSERT Team6.dbo.CustomerService ON;
-INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CreatedTime, CloseTime, BookingId, EmployeeId) VALUES
-  (9001,'Registered',2, 'Unable to book car for given date', 'What advantage is there in booking directly with an airline rather than through an agent? I have almost always booked with the airline but now have an agent whose price is around $50 cheaper than airline and airline does not have price match.
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 1, getdate()), ,1000),
-  (9003,'Registered',2, 'Card not working ending 6788', 'Does anyone know where Id find estimated prices from Atlanta. My vacation destination is up in the air at this point and Im flexible so Id like to find a listing of places that are cheap to fly. Mexico, carribean, central american are all good choices. Thanks in advance.
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 2, getdate()), ,1001),
-  (9004,'In-Progress',7, 'No car model available', 'Last night a guy travelling alone was moved from his seat into an exit row before takeoff.
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 4, getdate()), ,1002),
-  (9000,'In-Progress',9, 'Car rental price not available!', 'Next week we are off to Tunisia with Thomas Cook. . I know times are hard, but why do these companies insult our intelligence by claiming that the latest penny-pinching reduction in service is an â€œimprovementâ€? Geoff
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 5, getdate()), ,1003),
-  (9002,'Closed',5, 'Is MX300 disable friendly?', 'Evening Just wondered if anyone had a valid discount code for the terminal 2 meet and greet parking. Thanks
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 1, getdate()), , 1004),
-  (9004,'Closed',9, 'What is the make year for H1000?', 'Hi, As information to those who are frequent AA or One World alliance passengers and fly to/from/via LAX and Shanghai. 
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 2, getdate()), , 1005),
-  (9004,'Registered',4, 'Customer name not showing in booking', 'Just a heads up for my fellow TripAdvisior travelers: Delta "Partners" with Alitalia out of Rome. 
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 7, getdate()), , 1006),
-  (9003,'Registered',10, 'Unable to add card details', 'Can anyone help us decide on which card gives the most bang for your buck with regard to frequent flier miles. Wed like to be able to take advantage of using a credit card to accumulate miles to offset our air travel costs.
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 4, getdate()), , 1007),
-  (9000,'In-Progress',9, 'Payment gateway error', 'I have heard that today travel companies have been informed that the Thompson Dreamliner from UK will not operate until late this year or, next year. Bookings for this aircraft now seem not to be available for 2013.
-', CURRENT_TIMESTAMP,DATEADD(HOUR, 7, getdate()), , 1008),
-  (9009,'In-Progress',0, 'How to do Advanced booking?', 'There always seems to be scatch cards coming around on the package tour planes where we are told a percentage goes to a charity but does anybody know what percentage is actually given to the charity
-', CURRENT_TIMESTAMP, DATEADD(HOUR, 8, getdate()), , 1009);
-SET IDENTITY_INSERT Team6.dbo.CustomerService OFF;
-
 GO
 SET IDENTITY_INSERT Team6.dbo.CarMaintenance ON;
 GO
@@ -904,8 +890,110 @@ UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 
 FROM Bookings
 WHERE BookingID=3000;
 
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3001, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5002);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3001; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), MeterEnd=1520
+FROM Bookings
+WHERE BookingID=3001;
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3002, 102, 'Booked', DATEADD(DAY, 25, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 25, CURRENT_TIMESTAMP)), 5002);
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3003, 101, 'Booked', DATEADD(DAY, 5, CURRENT_TIMESTAMP), DATEADD(HOUR, 4, DATEADD(DAY, 5, CURRENT_TIMESTAMP)), 5003);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 5, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3003; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 5 , CURRENT_TIMESTAMP)), MeterEnd=15400
+FROM Bookings
+WHERE BookingID=3003;
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3004, 103, 'Booked', DATEADD(DAY, 34, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), 5005);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 34, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3004; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), MeterEnd=20380
+FROM Bookings
+WHERE BookingID=3004;
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3005, 104, 'Booked', DATEADD(DAY, 27, CURRENT_TIMESTAMP), DATEADD(HOUR, 4, DATEADD(DAY, 27, CURRENT_TIMESTAMP)), 5002);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 10, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3005; 
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3006, 105, 'Booked', DATEADD(DAY, 6, CURRENT_TIMESTAMP), DATEADD(HOUR, 7, DATEADD(DAY, 6, CURRENT_TIMESTAMP)), 5006);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 6, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3006; 
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3007, 106, 'Booked', DATEADD(DAY, 45, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 45, CURRENT_TIMESTAMP)), 5004);
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3008, 102, 'Booked', DATEADD(DAY, 30, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 30, CURRENT_TIMESTAMP)), 5003);
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3010, 107, 'Booked', DATEADD(DAY, 3, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 3, CURRENT_TIMESTAMP)), 5007);
+
 GO
 SET IDENTITY_INSERT Team6.dbo.Bookings OFF;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.CustomerService ON;
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9001,'Registered',2, 'Unable to book car for given date', 'What advantage is there in booking directly with an airline rather than through an agent? I have almost always booked with the airline but now have an agent whose price is around $50 cheaper than airline and airline does not have price match.
+', DATEADD(HOUR, 1, getdate()), 3000,1000);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9003,'Registered',2, 'Card not working ending 6788', 'Does anyone know where Id find estimated prices from Atlanta. My vacation destination is up in the air at this point and Im flexible so Id like to find a listing of places that are cheap to fly. Mexico, carribean, central american are all good choices. Thanks in advance.
+', DATEADD(HOUR, 2, getdate()), 3001,1001);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9004,'In-Progress',7, 'No car model available', 'Last night a guy travelling alone was moved from his seat into an exit row before takeoff.
+', DATEADD(HOUR, 4, getdate()), 3002,1002);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9002,'In-Progress',9, 'Car rental price not available!', 'Next week we are off to Tunisia with Thomas Cook. . I know times are hard, but why do these companies insult our intelligence by claiming that the latest penny-pinching reduction in service is an â€œimprovementâ€? Geoff
+', DATEADD(HOUR, 5, getdate()), 3003,1003);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9005,'Closed',5, 'Is MX300 disable friendly?', 'Evening Just wondered if anyone had a valid discount code for the terminal 2 meet and greet parking. Thanks
+', DATEADD(HOUR, 1, getdate()), 3004, 1004);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9006,'Closed',9, 'What is the make year for H1000?', 'Hi, As information to those who are frequent AA or One World alliance passengers and fly to/from/via LAX and Shanghai. 
+', DATEADD(HOUR, 2, getdate()), 3005, 1005);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9007,'Registered',4, 'Customer name not showing in booking', 'Just a heads up for my fellow TripAdvisior travelers: Delta "Partners" with Alitalia out of Rome. 
+', DATEADD(HOUR, 7, getdate()), 3006, 1006);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9008,'Registered',10, 'Unable to add card details', 'Can anyone help us decide on which card gives the most bang for your buck with regard to frequent flier miles. Wed like to be able to take advantage of using a credit card to accumulate miles to offset our air travel costs.
+', DATEADD(HOUR, 4, getdate()), 3007, 1007);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9009,'In-Progress',9, 'Payment gateway error', 'I have heard that today travel companies have been informed that the Thompson Dreamliner from UK will not operate until late this year or, next year. Bookings for this aircraft now seem not to be available for 2013.
+', DATEADD(HOUR, 7, getdate()), 3008, 1008);
+INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueTitle, IssueDescription, CloseTime, BookingId, EmployeeId) VALUES
+  (9010,'In-Progress',0, 'How to do Advanced booking?', 'There always seems to be scatch cards coming around on the package tour planes where we are told a percentage goes to a charity but does anybody know what percentage is actually given to the charity
+',  DATEADD(HOUR, 8, getdate()), 3010, 1009);
+SET IDENTITY_INSERT Team6.dbo.CustomerService OFF;
 
 -- SELECT STATEMENTs 
 SELECT * from Bookings;
@@ -925,9 +1013,31 @@ SELECT * from Vendor;
 SELECT * from VendorTransactions;
 
 
-----------------------------------------------------------------------------------------View to get number of cars  available for at a  Rental Location---------------------CREATE VIEW view_NumberOfCarsAvailable	AS	SELECT rl.RentalLocationID , MaxCapacity, 	CurrentCapacity, CAST(rl.StreetName as VARCHAR) + ', ' + CAST(rl.City as VARCHAR) + CAST(rl.State as VARCHAR) + CAST(rl.Zipcode as VARCHAR) as Address, count(c.CarID) as NumberOfCarsAvailable	FROM RentalLocation rl	INNER JOIN Car c	on c.RentalLocationID = rl.RentalLocationID 	Group by rl.RentalLocationID , MaxCapacity, CurrentCapacity
+-------------------------------------------------------------------------------------
+---View to get number of cars  available for at a  Rental Location---------------------
 
-----View for checking number of bookings for a session---- -- this can help car rental business for increasing or decreasing number of bookings being held per time period in order to increase profit
+
+CREATE VIEW view_NumberOfCarsAvailable
+	AS
+	SELECT rl.RentalLocationID , MaxCapacity, 
+		CurrentCapacity, STRING_AGG(CAST(rl.StreetName as VARCHAR) + ', ' + CAST(rl.City as VARCHAR) + CAST(rl.State as VARCHAR) + CAST(rl.Zipcode as VARCHAR), ', ') as Address, count(c.CarID) as NumberOfCarsAvailable
+	FROM RentalLocation rl
+	INNER JOIN Car c
+	on c.RentalLocationID = rl.RentalLocationID 
+	WHERE c.isAvailable = 1
+	Group by rl.RentalLocationID , MaxCapacity, CurrentCapacity
+
+SELECT * FROM view_NumberOfCarsAvailable;
+
+-- show no. of booking for a car in last 30 days
+-- show relevant info for a car
+	-- show no. of bookings
+	-- show avg rating
+	-- show total miles
+
+
+---- View for checking number of bookings for a session ---- 
+-- this can help car rental business for increasing or decreasing number of bookings being held per time period in order to increase profit
 
 
 -- TODO:
