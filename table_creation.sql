@@ -183,7 +183,7 @@ BEGIN
 
 	SELECT @meterrating = MeterRating
 	from Car
-	where Car = @carid
+	where CarID = @carid
 
 	RETURN @meterrating
 END;
@@ -219,7 +219,7 @@ UPDATE CarMaintenance
 SET DueDate = DATEADD(YEAR, 1, ServiceDate)
    ,DueMiles = 1500
 WHERE CarID = @carid
-END
+END;
 
 CREATE TRIGGER dbo.UpdateClosedTime
 ON dbo.CustomerService
@@ -247,149 +247,141 @@ WHERE ServiceID = @serid
 END;
 END;
 
-CREATE TRIGGER dbo.UpdateBookingsTable
+ALTER TRIGGER dbo.UpdateBookingsTable
 ON dbo.Bookings
 AFTER INSERT, UPDATE
 AS
 BEGIN
-DECLARE @status VARCHAR(100);
-DECLARE @bookid INT;
-DECLARE @meterend INT;
-DECLARE @meterstart INT;
-DECLARE @carid INT;
-DECLARE @meterrating INT;
-DECLARE @pricepermile DECIMAL;
-DECLARE @maxmilesperhr INT = 30;
-DECLARE @cartierid INT;
-DECLARE @bookingend DATETIME;
-DECLARE @bookingstart DATETIME;
-DECLARE @totalmiles INT;
-DECLARE @allocatedmiles INT;
-DECLARE @extratime DATETIME;
-DECLARE @extratimepenalty DECIMAL;
-DECLARE @ActualEndTime DATETIME;
-DECLARE @penalty DECIMAL = 0;
-DECLARE @custid int;
-DECLARE @rentalamount DECIMAL;
-DECLARE @cardid int;
-DECLARE @paymentid int;
+	DECLARE @status VARCHAR(100);
+	DECLARE @bookid INT;
+	DECLARE @meterend INT;
+	DECLARE @meterstart INT;
+	DECLARE @carid INT;
+	DECLARE @meterrating INT;
+	DECLARE @pricepermile DECIMAL;
+	DECLARE @maxmilesperhr INT = 30;
+	DECLARE @cartierid INT;
+	DECLARE @bookingend DATETIME;
+	DECLARE @bookingstart DATETIME;
+	DECLARE @totalmiles INT;
+	DECLARE @allocatedmiles INT;
+	DECLARE @extratime INT;
+	DECLARE @extratimepenalty DECIMAL;
+	DECLARE @ActualEndTime DATETIME;
+	DECLARE @penalty DECIMAL = 0;
+	DECLARE @custid int;
+	DECLARE @rentalamount DECIMAL;
+	DECLARE @cardid int;
+	DECLARE @paymentid int;
 
-SELECT
-	@bookid = b.BookingID
-FROM INSERTED i
-FULL JOIN deleted d
-	ON i.BookingID = d.BookingID;
+	SELECT
+		@bookid = COALESCE(i.BookingID, d.BookingID)
+	FROM INSERTED i
+	FULL JOIN deleted d
+		ON i.BookingID = d.BookingID;
 
-SELECT
-	@status = Status
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@status = Status
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SELECT
-	@custid = CustomerID
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@custid = CustomerID
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SELECT
-	@meterend = MeterEnd
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@meterend = MeterEnd
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SELECT
-	@meterstart = MeterStart
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@meterstart = MeterStart
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SELECT
-	@carid = CarId
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@carid = CarId
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SELECT
-	@cartierid = CarTierID
-FROM Car
-WHERE CarID = @carid
+	SELECT
+		@cartierid = CarTierID
+	FROM Car
+	WHERE CarID = @carid
 
-SELECT
-	@meterrating = MeterRating
-FROM Car
-WHERE CarID = @carid
+	SELECT
+		@meterrating = MeterRating
+	FROM Car
+	WHERE CarID = @carid
 
-SELECT
-	@bookingend = BookingEndTime
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@bookingend = BookingEndTime
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SELECT
-	@bookingstart = BookingStartTime
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@bookingstart = BookingStartTime
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SELECT
-	@ActualEndTime = ActualEndTime
-FROM Bookings
-WHERE BookingID = @bookid
+	SELECT
+		@ActualEndTime = ActualEndTime
+	FROM Bookings
+	WHERE BookingID = @bookid
 
-SET @totalmiles = (@meterend - @meterstart)
-SET @allocatedmiles = @maxmilesperhr * (@bookingend - @bookingstart)
+	SET @totalmiles = (@meterend - @meterstart)
+	SET @allocatedmiles = @maxmilesperhr * (DATEPART(HOUR,@bookingend) - DATEPART(HOUR,@bookingstart))
 
 	IF @status = 'Completed'
-	BEGIN
-
-
-		UPDATE Car
-		SET MeterRating = MeterRating + (@meterend - @meterstart)
-		WHERE CarID = @carid
-
-		UPDATE CarMaintenance
-		SET DueMiles = DueMiles - (@meterend - @meterstart)
-		WHERE CarID = @carid
-
-		IF @totalmiles > @allocatedmiles
 		BEGIN
-		SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT
-				ct.PricePerMile
-			FROM Car c
-				,CarTier ct
-			WHERE ct.CarTierID = c.CarTierID)
-					END
-				IF @ActualEndTime > @bookingend
-					BEGIN
-		SET @extratime = @ActualEndTime - @bookingend
-		SET @extratimepenalty = CAST(DATEPART(HOUR, @extratime) AS DECIMAL) * (SELECT
-				PricePerHour
-			FROM Car c
-				,CarTier ct
-			WHERE ct.CarTierID = c.CarTierID)
+			UPDATE Car
+			SET MeterRating = MeterRating + (@meterend - @meterstart)
+			WHERE CarID = @carid
 
-		SET @penalty = @penalty + @extratimepenalty
-			END
+			UPDATE CarMaintenance
+			SET DueMiles = DueMiles - (@meterend - @meterstart)
+			WHERE CarID = @carid
 
-		UPDATE Bookings SET Penalty = @penalty FROM Bookings 
-		WHERE BookingID = @bookid
+			IF @totalmiles > @allocatedmiles
+				BEGIN
+					SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT ct.PricePerMile FROM Car c,CarTier ct
+						WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
+				END
+			IF @ActualEndTime > @bookingend
+				BEGIN
+					SET @extratime = DATEPART(HOUR,@ActualEndTime) - DATEPART(HOUR,@bookingend)
+					SET @extratimepenalty = @extratime * (SELECT PricePerHour FROM Car c,CarTier ct
+						WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
+					SET @penalty = @penalty + @extratimepenalty
+				END
+
+			UPDATE Bookings SET Penalty = @penalty FROM Bookings 
+				WHERE BookingID = @bookid
+		
+	
+			UPDATE Payment
+			SET BillingAmount = (@rentalamount + @penalty),
+				ProcessedAt = CURRENT_TIMESTAMP,
+				PaymentStatus = 'COMPLETED'
+			WHERE PaymentID = @paymentid
 		END
 
-		UPDATE Payment
-		SET BillingAmount = @rentalamount + @penalty,
-			ProcessedAt = CURRENT_TIMESTAMP,
-			PaymentStatus = 'COMPLETED'
-		WHERE PaymentID = @paymentid
+	IF @status = 'InProgress'
+		BEGIN
+			UPDATE Bookings
+			SET MeterStart = @meterrating
+			WHERE CarID = @carid and BookingID = @bookid;
 
-	ELSE
-		IF @status = 'InProgress'
-			BEGIN
-				UPDATE Bookings
-				SET MeterStart = @meterrating
-				WHERE CarID = @carid and BookingID = @bookid;
-
-				UPDATE RentalLocation
-				SET CurrentCapacity = CurrentCapacity - 1
-				WHERE RentalLocationID = (SELECT
-						RentalLocationID
-				FROM Car
-				WHERE CarID = @carid)
-			END
-
+			UPDATE RentalLocation
+			SET CurrentCapacity = CurrentCapacity - 1
+			WHERE RentalLocationID = (SELECT
+					RentalLocationID
+			FROM Car
+			WHERE CarID = @carid)
+		END
+		print @rentalamount
+		PRINT 'inside trigger'
 	IF @status = 'Booked'
 		BEGIN
 			select @rentalamount = (CAST((DATEPART(HOUR, b.BookingEndTime) - DATEPART(HOUR, b.BookingStartTime)) AS DECIMAL) * ct.PricePerHour)
@@ -397,6 +389,8 @@ SET @allocatedmiles = @maxmilesperhr * (@bookingend - @bookingstart)
 				WHERE b.BookingID = @bookid 
 					and b.CarID = c.CarID
 					AND c.CarTierID = ct.CarTierID
+			PRINT @rentalamount
+			PRINT 'inside if'
 			
 			UPDATE Bookings
 			SET RentalAmount = @rentalamount
@@ -411,6 +405,7 @@ SET @allocatedmiles = @maxmilesperhr * (@bookingend - @bookingstart)
 			set PaymentId = @paymentid
 			WHERE BookingID = @bookid
 		END
+	PRINT @rentalamount
 END;
 
 -- table creation
@@ -575,10 +570,10 @@ CREATE TABLE VendorTransactions (
 CREATE TABLE Bookings (
 	BookingID INT IDENTITY NOT NULL PRIMARY KEY
    ,CustomerID INT NOT NULL REFERENCES Customer (CustomerID)
-   ,Status VARCHAR(30) NOT NULL CHECK ([status] IN ('Cancelled', 'Completed', 'InProgress')) DEFAULT 'Booked'
+   ,Status VARCHAR(30) NOT NULL CHECK ([status] IN ('Cancelled', 'Completed', 'InProgress', 'Booked')) DEFAULT 'Booked'
    ,BookingStartTime DATETIME NOT NULL
    ,BookingEndTime DATETIME NOT NULL
-   ,MeterStart AS dbo.getMeterRating(CarID)
+   ,MeterStart INT
    ,MeterEnd INT
    ,RentalAmount DECIMAL(9,2)
    ,Penalty DECIMAL(8, 2)
@@ -588,6 +583,7 @@ CREATE TABLE Bookings (
    ,ActualEndTime DATETIME
    ,BookingRating INT
 );
+
 
 CREATE TABLE CustomerService (
 	ServiceID INT IDENTITY NOT NULL PRIMARY KEY
@@ -620,21 +616,23 @@ DROP TABLE UserAuth;
 DROP TABLE Employee;
 DROP TABLE Membership;
 
-DELETE FROM Membership;
-DELETE FROM Employee;
-DELETE FROM UserAuth;
-DELETE FROM RentalLocation;
-DELETE FROM Vendor;
-DELETE FROM CarTier;
-DELETE FROM Customer;
-DELETE FROM CardDetails;
-DELETE from Payment;
-DELETE FROM CustomerMembership;
-DELETE FROM Car;
-DELETE FROM CarMaintenance;
-DELETE FROM VendorTransactions;
-DELETE FROM Bookings;
+
 DELETE FROM CustomerService;
+DELETE FROM Bookings;
+DELETE FROM VendorTransactions;
+DELETE FROM CarMaintenance;
+DELETE FROM Car;
+DELETE FROM CustomerMembership;
+DELETE from Payment;
+DELETE FROM CardDetails;
+DELETE FROM Customer;
+DELETE FROM CarTier;
+DELETE FROM Vendor;
+DELETE FROM RentalLocation;
+DELETE FROM UserAuth;
+DELETE FROM Employee;
+DELETE FROM Membership;
+
 
 -- INSERT STATEMENTS
 SET IDENTITY_INSERT Team6.dbo.Membership ON;
@@ -853,16 +851,63 @@ INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueT
 ', CURRENT_TIMESTAMP,DATEADD(HOUR, 7, getdate()), , 1008),
   (9009,'In-Progress',0, 'How to do Advanced booking?', 'There always seems to be scatch cards coming around on the package tour planes where we are told a percentage goes to a charity but does anybody know what percentage is actually given to the charity
 ', CURRENT_TIMESTAMP, DATEADD(HOUR, 8, getdate()), , 1009);
-SET IDENTITY_INSERT Team6.dbo.CustomerService ON;
+SET IDENTITY_INSERT Team6.dbo.CustomerService OFF;
 
 GO
-SET IDENTITY_INSERT Team6.dbo.VendorTransactions ON;
+SET IDENTITY_INSERT Team6.dbo.CarMaintenance ON;
 GO
-INSERT INTO CarMaintenance()
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1000, 5001);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1001, 5002);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1002, 5003);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1003, 5004);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1004, 5005);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1005, 5006);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1006, 5007);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1007, 5008);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1008, 5009);
+INSERT INTO Team6.dbo.CarMaintenance(MaintenanceID, CarID)
+VALUES
+(1009, 5010);
 GO
-SET IDENTITY_INSERT Team6.dbo.VendorTransactions OFF;
+SET IDENTITY_INSERT Team6.dbo.CarMaintenance OFF;
 
--- SELECT STATEMENTs
+GO
+SET IDENTITY_INSERT Team6.dbo.Bookings ON;
+GO
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3000, 100, 'Booked', DATEADD(DAY, 20, CURRENT_TIMESTAMP), DATEADD(HOUR, 5, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), 5001);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 20, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3000; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), MeterEnd=10700
+FROM Bookings
+WHERE BookingID=3000;
+
+GO
+SET IDENTITY_INSERT Team6.dbo.Bookings OFF;
+
+-- SELECT STATEMENTs 
 SELECT * from Bookings;
 SELECT * from Car;
 SELECT * from CardDetails;
