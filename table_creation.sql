@@ -10,7 +10,19 @@
  */
 ------------------------------------------------------------------------------------
 
+------------------------------------------------------------------------------------
+-- ORDER OF EXECUTION
+/*
+	1. Create Encryption
+	2. Create Functions 
+	3. Create Tables
+	4. Create Triggers (one by one)
+	5. Insert Data
+	6. Create Views
+	7. Clean-up Using HouseKeeping Commands
+*/
 
+------------------------------------------------------------------------------------
 
 USE Team6;
 
@@ -33,16 +45,6 @@ ENCRYPTION BY CERTIFICATE TestCertificate;
 OPEN SYMMETRIC KEY randomkey 
 DECRYPTION BY CERTIFICATE TestCertificate;
 
--- Close the symmetric key
-CLOSE SYMMETRIC KEY randomkey;
--- Drop the symmetric key
-DROP SYMMETRIC KEY randomkey;
--- Drop the certificate
-DROP CERTIFICATE TestCertificate;
---Drop the DMK
-DROP MASTER KEY;
-
-
 
 ------------------------------------------------------------------------------------
 -- functions for computed columns
@@ -62,7 +64,7 @@ CASE
 END
 	RETURN @ISVALID
 END;
-
+GO
 -- calculates age of the customer
 
 CREATE FUNCTION CalculateAge(@DOB DATE)
@@ -94,7 +96,7 @@ END;
 
 
 -- calculates membership cost based on price and duration
-
+GO
 CREATE FUNCTION CalculateMembershipCost(@MEMBERSHIPID INT)
 RETURNS DECIMAL 
 BEGIN
@@ -108,7 +110,7 @@ RETURN @MemCost
 END;
 
 -- function to fetch car type from car tier 
-
+GO
 CREATE FUNCTION getCarType(@CarTierID INT)
 RETURNS VARCHAR (40)
 BEGIN
@@ -122,7 +124,7 @@ END;
 
 
 -- checks car availability based on booking status 
-
+GO
 CREATE FUNCTION dbo.checkavailability(@CarID int)
 returns BIT
 AS
@@ -168,7 +170,7 @@ SET @isavailable = 0
 END;
 
 -- calculates billing amount from rental amount and penalty
-
+GO
 CREATE FUNCTION dbo.calculateBillingAmount(@PaymentID INT)
 returns DECIMAL
 AS
@@ -190,7 +192,7 @@ RETURN @sum
 END;
 
 -- function to populate car's meter rating in booking table
-
+GO
 CREATE FUNCTION dbo.getMeterRating(@CarID INT)
 RETURNS INT 
 AS
@@ -204,7 +206,7 @@ BEGIN
 	RETURN @meterrating
 END;
 
-
+GO
 
 ------------------------------------------------------------------------------------
 -- Table creation
@@ -401,9 +403,8 @@ CREATE TABLE CustomerService (
 -- triggers for all the tables
 ------------------------------------------------------------------------------------
 
-
 -- update UpdatedAt on table update
-
+GO
 CREATE TRIGGER dbo.SET_UPDATEDATE 
 ON UserAuth 
 AFTER UPDATE 
@@ -415,7 +416,7 @@ END;
 
 
 -- reset car maintenance on update
-
+GO
 CREATE TRIGGER dbo.ResetCarMaintenance 
 ON CarMaintenance
 AFTER INSERT
@@ -439,7 +440,7 @@ END;
 
 -- update customer request closed time once issue is resloved
 
-
+GO
 CREATE TRIGGER dbo.UpdateClosedTime
 ON dbo.CustomerService
 AFTER UPDATE
@@ -467,7 +468,7 @@ END;
 END;
 
 -- All booking table related logic, to update rental amount, penalty, Payment related data and car data
-
+GO
 CREATE TRIGGER dbo.UpdateBookingsTable
 ON dbo.Bookings
 AFTER INSERT, UPDATE
@@ -641,48 +642,9 @@ BEGIN
 	PRINT @rentalamount
 END;
 
-
--- HouseKeeeping
-USE Team6;
-
-DROP TABLE CustomerService;
-DROP TABLE Bookings;
-DROP TABLE VendorTransactions;
-DROP TABLE CarMaintenance;
-DROP TABLE Car;
-DROP TABLE CustomerMembership;
-DROP TABLE Payment;
-DROP TABLE CardDetails;
-DROP TABLE Customer;
-DROP TABLE CarTier;
-DROP TABLE Vendor;
-DROP TABLE RentalLocation;
-DROP TABLE UserAuth;
-DROP TABLE Employee;
-DROP TABLE Membership;
-
-
-DELETE FROM CustomerService;
-DELETE FROM Bookings;
-DELETE FROM VendorTransactions;
-DELETE FROM CarMaintenance;
-DELETE FROM Car;
-DELETE FROM CustomerMembership;
-DELETE from Payment;
-DELETE FROM CardDetails;
-DELETE FROM Customer;
-DELETE FROM CarTier;
-DELETE FROM Vendor;
-DELETE FROM RentalLocation;
-DELETE FROM UserAuth;
-DELETE FROM Employee;
-DELETE FROM Membership;
-
-
 ------------------------------------------------------------------------------------
 -- Data insertion and updates
 ------------------------------------------------------------------------------------
-
 
 SET IDENTITY_INSERT Team6.dbo.Membership ON;
 GO
@@ -1233,11 +1195,6 @@ UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 
 FROM Bookings
 WHERE BookingID=3023;
 
-
-------------------------------------------------
-
-
-
 GO
 SET IDENTITY_INSERT Team6.dbo.Bookings OFF;
 
@@ -1276,14 +1233,13 @@ INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueT
 SET IDENTITY_INSERT Team6.dbo.CustomerService OFF;
 
 
-
 -- SELECT STATEMENTs 
-SELECT * from Bookings;
 SELECT * from Car;
 SELECT * from CardDetails;
 SELECT * from CarMaintenance;
 SELECT * from CarTier;
 SELECT * from Customer;
+SELECT * from Bookings;
 SELECT * from CustomerMembership;
 SELECT * from CustomerService;
 SELECT * from Employee;
@@ -1299,12 +1255,11 @@ SELECT * from VendorTransactions;
 -- VIEWS
 ------------------------------------------------------------------------------------
 
-
 /*
  * View to get number of cars  available for at a  Rental Location
  */
 
-
+GO
 CREATE VIEW view_NumberOfCarsAvailable
 	AS
 	SELECT rl.RentalLocationID , MaxCapacity, 
@@ -1315,12 +1270,14 @@ CREATE VIEW view_NumberOfCarsAvailable
 	WHERE c.isAvailable = 1
 	Group by rl.RentalLocationID , MaxCapacity, CurrentCapacity
 
+GO
 SELECT * FROM view_NumberOfCarsAvailable;
 
 /*
  * View to show snapshot of the performance of a particular make for the last 30 days
  */
-
+GO
+CREATE VIEW view_Make_car_Snapshot_past_month as 
 WITH TEMP AS (
 SELECT c.Make, c.Model as TopModels, COUNT(*) as TB, 
 AVG((b.MeterEnd - b.MeterStart)) as ADP, ROUND(AVG(p.BillingAmount), 2) as ARev, AVG(b.BookingRating) as ARating  FROM Car c 
@@ -1332,12 +1289,14 @@ GROUP by c.Make, c.Model
 Select DISTINCT(Make), STUFF((select ', ' + CAST(t1.TopModels as VARCHAR) from TEMP t1 where t1.Make=t2.Make FOR XML PATH('')) , 1, 2, '') as TopModels, 
 SUM(TB) as TotalBookings, AVG(ADP) as AverageDistancePerTrip, AVG(ARev) as AverageRevenue, AVG(ARating) as AverageRating from TEMP t2
 GROUP BY Make
-ORDER by TotalBookings DESC
+
+GO
+SELECT * from view_Make_car_Snapshot_past_month;
 
 /*
  * View for Quarterly business revenue per rental location
  */
-
+GO
 CREATE view view_Quarterly_Business_Revenue_per_location
 as
 select DISTINCT (rl.City + ', ' + rl.State) as RentalLocation, YEAR(p.ProcessedAt) as RevenueYear, DATEPART(QUARTER, p.ProcessedAt) as [Quarter], SUM(p.BillingAmount) as TotalRevenue
@@ -1351,9 +1310,70 @@ ON c.RentalLocationID = rl.RentalLocationID
 WHERE p.PaymentStatus = 'COMPLETED'
 GROUP BY YEAR(p.ProcessedAt), DATEPART(QUARTER, p.ProcessedAt), rl.RentalLocationID, rl.City, rl.State
 
+GO
 SELECT * from view_Quarterly_Business_Revenue_per_location
 ORDER by TotalRevenue DESC;
 
 
 
+-- HouseKeeeping
+USE Team6;
 
+-- Delete All records From Tables
+DELETE FROM CustomerService;
+DELETE FROM Bookings;
+DELETE FROM VendorTransactions;
+DELETE FROM CarMaintenance;
+DELETE FROM Car;
+DELETE FROM CustomerMembership;
+DELETE from Payment;
+DELETE FROM CardDetails;
+DELETE FROM Customer;
+DELETE FROM CarTier;
+DELETE FROM Vendor;
+DELETE FROM RentalLocation;
+DELETE FROM UserAuth;
+DELETE FROM Employee;
+DELETE FROM Membership;
+
+-- Drop Tables
+DROP TABLE CustomerService;
+DROP TABLE Bookings;
+DROP TABLE VendorTransactions;
+DROP TABLE CarMaintenance;
+DROP TABLE Car;
+DROP TABLE CustomerMembership;
+DROP TABLE Payment;
+DROP TABLE CardDetails;
+DROP TABLE Customer;
+DROP TABLE CarTier;
+DROP TABLE Vendor;
+DROP TABLE RentalLocation;
+DROP TABLE UserAuth;
+DROP TABLE Employee;
+DROP TABLE Membership;
+
+-- Drop Views
+DROP VIEW view_NumberOfCarsAvailable
+DROP VIEW view_Make_car_Snapshot_past_month
+DROP view view_Quarterly_Business_Revenue_per_location
+
+
+-- Drop Functions
+DROP FUNCTION ValidateEmail
+DROP FUNCTION CalculateAge
+DROP FUNCTION CalculateMembershipEndDate
+DROP FUNCTION CalculateMembershipCost
+DROP FUNCTION getCarType
+DROP FUNCTION dbo.checkavailability
+DROP FUNCTION dbo.calculateBillingAmount
+DROP FUNCTION dbo.getMeterRating
+
+-- Close the symmetric key
+CLOSE SYMMETRIC KEY randomkey;
+-- Drop the symmetric key
+DROP SYMMETRIC KEY randomkey;
+-- Drop the certificate
+DROP CERTIFICATE TestCertificate;
+--Drop the DMK
+DROP MASTER KEY;
