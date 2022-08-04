@@ -1,6 +1,23 @@
+------------------------------------------------------------------------------------
+-- Idea: Car Rental Management System
+-- Team members
+/*
+ Trinadh Phani Ginjupalli, NUID: 002117493
+ Kshitij Zutshi, NUID: 001021288
+ Priya Mathanagopal NUID: 002925371
+ Raj Sudharshan Vidyalatha Natarajan, NUID: 002100399
+ Umang Barot, NUID: 002980395
+ */
+------------------------------------------------------------------------------------
+
+
+
 USE Team6;
 
+------------------------------------------------------------------------------------
 -- encryption for card details
+------------------------------------------------------------------------------------
+
 
 CREATE MASTER KEY 
 ENCRYPTION BY PASSWORD = 'Team6@dmdd';
@@ -25,10 +42,13 @@ DROP CERTIFICATE TestCertificate;
 --Drop the DMK
 DROP MASTER KEY;
 
--- housekeeping
 
---DROP FUNCTION 
--- funtions 
+
+------------------------------------------------------------------------------------
+-- functions for computed columns
+------------------------------------------------------------------------------------
+
+-- validates email id of employee, customer
 
 CREATE FUNCTION ValidateEmail(@Email VARCHAR(100))
 RETURNS INT 
@@ -43,6 +63,8 @@ END
 	RETURN @ISVALID
 END;
 
+-- calculates age of the customer
+
 CREATE FUNCTION CalculateAge(@DOB DATE)
 RETURNS INT 
 BEGIN
@@ -51,6 +73,8 @@ BEGIN
 SET @age = DATEDIFF(HOUR, @DOB, GETDATE()) / 8766
 	RETURN @age
 END;
+
+-- calculates membership end date
 
 CREATE FUNCTION CalculateMembershipEndDate(@STARTDATE DATE, @MEMBERSHIPID INT)
 RETURNS DATE 
@@ -68,6 +92,9 @@ SET @ENDDATE = DATEADD(MONTH, @MemDuration, @STARTDATE)
 	RETURN @ENDDATE
 END;
 
+
+-- calculates membership cost based on price and duration
+
 CREATE FUNCTION CalculateMembershipCost(@MEMBERSHIPID INT)
 RETURNS DECIMAL 
 BEGIN
@@ -79,6 +106,8 @@ FROM Membership
 WHERE MembershipID = @MEMBERSHIPID
 RETURN @MemCost
 END;
+
+-- function to fetch car type from car tier 
 
 CREATE FUNCTION getCarType(@CarTierID INT)
 RETURNS VARCHAR (40)
@@ -92,24 +121,7 @@ RETURN @cartype;
 END;
 
 
-CREATE FUNCTION dbo.checkPrimaryCard(@CustomerID INT)
-returns INT
-AS
-BEGIN
-	DECLARE @flag INT = 0;
-
-	SET @flag = CASE 	
-		WHEN EXISTS (SELECT
-			*
-		FROM CardDetails
-		WHERE CustomerID = @CustomerID
-		AND IsPrimary = 1) THEN 1
-		ELSE 0
-	END
-	return @flag
-END;
-
- 
+-- checks car availability based on booking status 
 
 CREATE FUNCTION dbo.checkavailability(@CarID int)
 returns BIT
@@ -155,6 +167,8 @@ SET @isavailable = 0
 	RETURN @isavailable
 END;
 
+-- calculates billing amount from rental amount and penalty
+
 CREATE FUNCTION dbo.calculateBillingAmount(@PaymentID INT)
 returns DECIMAL
 AS
@@ -175,6 +189,8 @@ WHERE BookingID = @bookid
 RETURN @sum
 END;
 
+-- function to populate car's meter rating in booking table
+
 CREATE FUNCTION dbo.getMeterRating(@CarID INT)
 RETURNS INT 
 AS
@@ -188,239 +204,12 @@ BEGIN
 	RETURN @meterrating
 END;
 
--- TRIGGERS
-CREATE TRIGGER dbo.SET_UPDATEDATE 
-ON UserAuth 
-AFTER UPDATE 
-AS 
-BEGIN
-	UPDATE UserAuth
-	SET UpdatedAt = CURRENT_TIMESTAMP;
-END;
 
 
+------------------------------------------------------------------------------------
+-- Table creation
+------------------------------------------------------------------------------------
 
-CREATE TRIGGER dbo.ResetCarMaintenance -- edit - include carid, only after update on service date
-ON CarMaintenance
-AFTER INSERT
-AS
-BEGIN
-DECLARE @carid INT;
-DECLARE @serDate DATETIME;
-
-
-SELECT
-	@carid = c.CarID
-FROM Car c
-INNER JOIN inserted i
-	ON c.CarID = i.CarID;
-
-UPDATE CarMaintenance
-SET DueDate = DATEADD(YEAR, 1, ServiceDate)
-   ,DueMiles = 1500
-WHERE CarID = @carid
-END;
-
-CREATE TRIGGER dbo.UpdateClosedTime
-ON dbo.CustomerService
-AFTER UPDATE
-AS
-BEGIN
-DECLARE @status VARCHAR(100);
-DECLARE @serid INT;
-SELECT
-	@status = cs1.ComplaintStatus
-FROM CustomerService cs1
-INNER JOIN inserted i
-	ON cs1.ServiceID = i.ServiceID;
-SELECT
-	@serid = cs1.ServiceID
-FROM CustomerService cs1
-INNER JOIN inserted i
-	ON cs1.ServiceID = i.ServiceID;
-
-IF @status = 'Closed'
-BEGIN
-UPDATE CustomerService
-SET CloseTime = CURRENT_TIMESTAMP
-WHERE ServiceID = @serid
-END;
-END;
-
-ALTER TRIGGER dbo.UpdateBookingsTable
-ON dbo.Bookings
-AFTER INSERT, UPDATE
-AS
-BEGIN
-	DECLARE @status VARCHAR(100);
-	DECLARE @bookid INT;
-	DECLARE @meterend INT;
-	DECLARE @meterstart INT;
-	DECLARE @carid INT;
-	DECLARE @meterrating INT;
-	DECLARE @pricepermile DECIMAL;
-	DECLARE @maxmilesperhr INT = 30;
-	DECLARE @cartierid INT;
-	DECLARE @bookingend DATETIME;
-	DECLARE @bookingstart DATETIME;
-	DECLARE @totalmiles INT;
-	DECLARE @allocatedmiles INT;
-	DECLARE @extratime INT;
-	DECLARE @extratimepenalty DECIMAL;
-	DECLARE @ActualEndTime DATETIME;
-	DECLARE @penalty DECIMAL = 0;
-	DECLARE @custid int;
-	DECLARE @rentalamount DECIMAL;
-	DECLARE @cardid int;
-	DECLARE @paymentid int;
-
-	SELECT
-		@bookid = COALESCE(i.BookingID, d.BookingID)
-	FROM INSERTED i
-	FULL JOIN deleted d
-		ON i.BookingID = d.BookingID;
-
-	SELECT
-		@status = Status
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SELECT
-		@custid = CustomerID
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SELECT
-		@meterend = MeterEnd
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SELECT
-		@meterstart = MeterStart
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SELECT
-		@carid = CarId
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SELECT
-		@cartierid = CarTierID
-	FROM Car
-	WHERE CarID = @carid
-
-	SELECT
-		@meterrating = MeterRating
-	FROM Car
-	WHERE CarID = @carid
-
-	SELECT
-		@bookingend = BookingEndTime
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SELECT
-		@bookingstart = BookingStartTime
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SELECT
-		@ActualEndTime = ActualEndTime
-	FROM Bookings
-	WHERE BookingID = @bookid
-
-	SET @totalmiles = (@meterend - @meterstart)
-	SET @allocatedmiles = @maxmilesperhr * (DATEPART(HOUR,@bookingend) - DATEPART(HOUR,@bookingstart))
-
-	IF @status = 'Completed'
-		BEGIN
-			UPDATE Car
-			SET MeterRating = MeterRating + (@meterend - @meterstart)
-			WHERE CarID = @carid
-
-			UPDATE CarMaintenance
-			SET DueMiles = DueMiles - (@meterend - @meterstart)
-			WHERE CarID = @carid
-
-			IF @totalmiles > @allocatedmiles
-					BEGIN
-						print '@totalmiles > @allocatedmiles'
-						PRINT @penalty 
-						PRINT @totalmiles
-						PRINT @allocatedmiles
-						DECLARE @temp DECIMAL;
-						SELECT @temp =  ct.PricePerMile FROM Car c,CarTier ct
-									WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID
-						print @temp
-						SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT ct.PricePerMile FROM Car c,CarTier ct
-							WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
-					END
-				print @penalty
-				IF @ActualEndTime > @bookingend
-					BEGIN
-						SET @extratime = DATEPART(HOUR,@ActualEndTime) - DATEPART(HOUR,@bookingend)
-						SET @extratimepenalty = @extratime * (SELECT PricePerHour FROM Car c,CarTier ct
-							WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
-						SET @penalty = @penalty + @extratimepenalty
-					print '@ActualEndTime > @bookingend'
-					print @extratime
-					print @extratimepenalty
-					END
-				print @penalty
-			UPDATE Bookings SET Penalty = @penalty FROM Bookings 
-				WHERE BookingID = @bookid
-		
-	
-			UPDATE Payment
-			SET BillingAmount = ((SELECT RentalAmount from Bookings WHERE BookingID = @bookid) + @penalty),
-				ProcessedAt = CURRENT_TIMESTAMP,
-				PaymentStatus = 'COMPLETED'
-			WHERE PaymentID = (SELECT PaymentId from Bookings WHERE BookingID = @bookid)
-		END
-
-	IF @status = 'InProgress'
-		BEGIN
-			UPDATE Bookings
-			SET MeterStart = @meterrating
-			WHERE CarID = @carid and BookingID = @bookid;
-
-			UPDATE RentalLocation
-			SET CurrentCapacity = CurrentCapacity - 1
-			WHERE RentalLocationID = (SELECT
-					RentalLocationID
-			FROM Car
-			WHERE CarID = @carid)
-		END
-		print @rentalamount
-		PRINT 'inside trigger'
-	IF @status = 'Booked'
-		BEGIN
-			select @rentalamount = (CAST((DATEPART(HOUR, b.BookingEndTime) - DATEPART(HOUR, b.BookingStartTime)) AS DECIMAL) * ct.PricePerHour) + ct.BasicInsurance + ct.CollisionCoverage + ct.BodyCoverage + ct.MedicalCoverage
-				FROM Bookings b, Car c, CarTier ct
-				WHERE b.BookingID = @bookid 
-					and b.CarID = c.CarID
-					AND c.CarTierID = ct.CarTierID
-			PRINT @rentalamount
-			PRINT 'inside if'
-			
-			UPDATE Bookings
-			SET RentalAmount = @rentalamount
-			WHERE BookingID = @bookid
-
-			SELECT @cardid = CardID from CardDetails WHERE CustomerID = @custid
-
-			INSERT INTO Payment VALUES(@cardid, @rentalamount, CURRENT_TIMESTAMP, 'PENDING')
-			SELECT @paymentid = Scope_Identity()
-
-			UPDATE Bookings
-			set PaymentId = @paymentid
-			WHERE BookingID = @bookid
-		END
-	PRINT @rentalamount
-END;
-
--- table creation
 
 CREATE TABLE dbo.Membership (
 	MembershipID INT IDENTITY NOT NULL PRIMARY KEY
@@ -497,7 +286,6 @@ CREATE TABLE Customer (
    ,LicenseExpiry DATE NOT NULL CHECK (LicenseExpiry > DATEADD(MONTH, 6, CURRENT_TIMESTAMP))
    ,IsVerified BIT
    ,UserId INT NOT NULL REFERENCES UserAuth (UserId)
-   --,CONSTRAINT LicenceNumberValidCheck CHECK (LicenseNumber LIKE '^[A-Z](?:\d[- ]*){14}$')
 );
 
 ALTER TABLE Customer ADD CONSTRAINT checkValidEmailCustomer CHECK (dbo.ValidateEmail(EmailID) = 1);
@@ -513,7 +301,6 @@ CREATE TABLE CardDetails (
    ,IsPrimary BIT
    ,CustomerID INT NOT NULL REFERENCES Customer (CustomerID)
    ,CONSTRAINT cardExpiryCheck CHECK (ExpiryDate > DATEADD(MONTH, 6, CURRENT_TIMESTAMP))
-   --,CONSTRAINT checkprimary CHECK (dbo.checkPrimaryCard(CustomerID) = 0)
 );
 
 -- unique together on CardNumber and CustomerID 
@@ -609,6 +396,252 @@ CREATE TABLE CustomerService (
    ,EmployeeId INT NOT NULL REFERENCES Employee (EmployeeId)
 );
 
+
+------------------------------------------------------------------------------------
+-- triggers for all the tables
+------------------------------------------------------------------------------------
+
+
+-- update UpdatedAt on table update
+
+CREATE TRIGGER dbo.SET_UPDATEDATE 
+ON UserAuth 
+AFTER UPDATE 
+AS 
+BEGIN
+	UPDATE UserAuth
+	SET UpdatedAt = CURRENT_TIMESTAMP;
+END;
+
+
+-- reset car maintenance on update
+
+CREATE TRIGGER dbo.ResetCarMaintenance 
+ON CarMaintenance
+AFTER INSERT
+AS
+BEGIN
+DECLARE @carid INT;
+DECLARE @serDate DATETIME;
+
+SELECT
+	@carid = c.CarID
+FROM Car c
+INNER JOIN inserted i
+	ON c.CarID = i.CarID;
+
+UPDATE CarMaintenance
+SET DueDate = DATEADD(YEAR, 1, ServiceDate)
+   ,DueMiles = 1500
+WHERE CarID = @carid
+END;
+
+
+-- update customer request closed time once issue is resloved
+
+
+CREATE TRIGGER dbo.UpdateClosedTime
+ON dbo.CustomerService
+AFTER UPDATE
+AS
+BEGIN
+DECLARE @status VARCHAR(100);
+DECLARE @serid INT;
+SELECT
+	@status = cs1.ComplaintStatus
+FROM CustomerService cs1
+INNER JOIN inserted i
+	ON cs1.ServiceID = i.ServiceID;
+SELECT
+	@serid = cs1.ServiceID
+FROM CustomerService cs1
+INNER JOIN inserted i
+	ON cs1.ServiceID = i.ServiceID;
+
+IF @status = 'Closed'
+BEGIN
+UPDATE CustomerService
+SET CloseTime = CURRENT_TIMESTAMP
+WHERE ServiceID = @serid
+END;
+END;
+
+-- All booking table related logic, to update rental amount, penalty, Payment related data and car data
+
+CREATE TRIGGER dbo.UpdateBookingsTable
+ON dbo.Bookings
+AFTER INSERT, UPDATE
+AS
+BEGIN
+	DECLARE @status VARCHAR(100);
+	DECLARE @bookid INT;
+	DECLARE @meterend INT;
+	DECLARE @meterstart INT;
+	DECLARE @carid INT;
+	DECLARE @meterrating INT;
+	DECLARE @pricepermile DECIMAL;
+	DECLARE @maxmilesperhr INT = 30;
+	DECLARE @cartierid INT;
+	DECLARE @bookingend DATETIME;
+	DECLARE @bookingstart DATETIME;
+	DECLARE @totalmiles INT;
+	DECLARE @allocatedmiles INT;
+	DECLARE @extratime INT;
+	DECLARE @extratimepenalty DECIMAL;
+	DECLARE @ActualEndTime DATETIME;
+	DECLARE @penalty DECIMAL = 0;
+	DECLARE @custid int;
+	DECLARE @rentalamount DECIMAL;
+	DECLARE @cardid int;
+	DECLARE @paymentid int;
+
+	SELECT
+		@bookid = COALESCE(i.BookingID, d.BookingID)
+	FROM INSERTED i
+	FULL JOIN deleted d
+		ON i.BookingID = d.BookingID;
+
+	SELECT
+		@status = Status
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SELECT
+		@custid = CustomerID
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SELECT
+		@meterend = MeterEnd
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SELECT
+		@meterstart = MeterStart
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SELECT
+		@carid = CarId
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SELECT
+		@cartierid = CarTierID
+	FROM Car
+	WHERE CarID = @carid
+
+	SELECT
+		@meterrating = MeterRating
+	FROM Car
+	WHERE CarID = @carid
+
+	SELECT
+		@bookingend = BookingEndTime
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SELECT
+		@bookingstart = BookingStartTime
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SELECT
+		@ActualEndTime = ActualEndTime
+	FROM Bookings
+	WHERE BookingID = @bookid
+
+	SET @totalmiles = (@meterend - @meterstart)
+	SET @allocatedmiles = @maxmilesperhr * (DATEDIFF(HOUR,@bookingstart,@bookingend))
+
+	IF @status = 'Completed'
+		BEGIN
+			UPDATE Car
+			SET MeterRating = MeterRating + (@meterend - @meterstart)
+			WHERE CarID = @carid
+
+			UPDATE CarMaintenance
+			SET DueMiles = DueMiles - (@meterend - @meterstart)
+			WHERE CarID = @carid
+
+			IF @totalmiles > @allocatedmiles
+					BEGIN
+						print '@totalmiles > @allocatedmiles'
+						PRINT @penalty 
+						PRINT @totalmiles
+						PRINT @allocatedmiles
+						DECLARE @temp DECIMAL;
+						SELECT @temp =  ct.PricePerMile FROM Car c,CarTier ct
+									WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID
+						print @temp
+						SET @penalty = @penalty + (@totalmiles - @allocatedmiles) * (SELECT ct.PricePerMile FROM Car c,CarTier ct
+							WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
+					END
+				print @penalty
+				IF @ActualEndTime > @bookingend
+					BEGIN
+						SET @extratime = DATEDIFF(HOUR, @bookingend, @ActualEndTime)
+						SET @extratimepenalty = @extratime * (SELECT PricePerHour FROM Car c,CarTier ct
+							WHERE c.CarID = @carid and ct.CarTierID = c.CarTierID)
+						SET @penalty = @penalty + @extratimepenalty
+					print '@ActualEndTime > @bookingend'
+					print @extratime
+					print @extratimepenalty
+					END
+				print @penalty
+			UPDATE Bookings SET Penalty = @penalty FROM Bookings 
+				WHERE BookingID = @bookid
+		
+	
+			UPDATE Payment
+			SET BillingAmount = ((SELECT RentalAmount from Bookings WHERE BookingID = @bookid) + @penalty),
+				ProcessedAt = CURRENT_TIMESTAMP,
+				PaymentStatus = 'COMPLETED'
+			WHERE PaymentID = (SELECT PaymentId from Bookings WHERE BookingID = @bookid)
+		END
+
+	IF @status = 'InProgress'
+		BEGIN
+			UPDATE Bookings
+			SET MeterStart = @meterrating
+			WHERE CarID = @carid and BookingID = @bookid;
+
+			UPDATE RentalLocation
+			SET CurrentCapacity = CurrentCapacity - 1
+			WHERE RentalLocationID = (SELECT
+					RentalLocationID
+			FROM Car
+			WHERE CarID = @carid)
+		END
+		print @rentalamount
+		PRINT 'inside trigger'
+	IF @status = 'Booked'  
+		BEGIN
+			select @rentalamount = CAST(DATEDIFF(HOUR, b.BookingStartTime, b.BookingEndTime) * ct.PricePerHour AS DECIMAL) + ct.BasicInsurance + ct.CollisionCoverage + ct.BodyCoverage + ct.MedicalCoverage
+				FROM Bookings b, Car c, CarTier ct
+				WHERE b.BookingID = @bookid 
+					and b.CarID = c.CarID
+					AND c.CarTierID = ct.CarTierID
+			PRINT @rentalamount
+			PRINT 'inside if'
+			
+			UPDATE Bookings
+			SET RentalAmount = @rentalamount
+			WHERE BookingID = @bookid
+
+			SELECT @cardid = CardID from CardDetails WHERE CustomerID = @custid
+
+			INSERT INTO Payment VALUES(@cardid, @rentalamount, CURRENT_TIMESTAMP, 'PENDING')
+			SELECT @paymentid = Scope_Identity()
+
+			UPDATE Bookings
+			set PaymentId = @paymentid
+			WHERE BookingID = @bookid
+		END
+	PRINT @rentalamount
+END;
+
+
 -- HouseKeeeping
 USE Team6;
 
@@ -646,7 +679,11 @@ DELETE FROM Employee;
 DELETE FROM Membership;
 
 
--- INSERT STATEMENTS
+------------------------------------------------------------------------------------
+-- Data insertion and updates
+------------------------------------------------------------------------------------
+
+
 SET IDENTITY_INSERT Team6.dbo.Membership ON;
 GO
 INSERT INTO Team6.dbo.Membership (MembershipID, Duration, Price, Status, MembershipType) 
@@ -781,7 +818,6 @@ VALUES
   (7008,'Sage Melton','May 01,2024', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'116'),EncryptByKey(Key_GUID(N'randomkey'),'4532721623584412'),0, 107),
   (7009,'Yasir Haynes','Dec 28, 2023', 'Debit',EncryptByKey(Key_GUID(N'randomkey'),'528'),EncryptByKey(Key_GUID(N'randomkey'),'4024007112275695'),0, 108),
   (7010,'Oren Sargent','Oct 11, 2023', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'524'),EncryptByKey(Key_GUID(N'randomkey'),'4539652722474333'),0, 109);
-  --(7011,'Oren Sargent','Oct 11, 2023', 'Credit',EncryptByKey(Key_GUID(N'randomkey'),'524'),EncryptByKey(Key_GUID(N'randomkey'),'453923452722474333'),1, 109);
 GO
 SET IDENTITY_INSERT Team6.dbo.CardDetails OFF;
 
@@ -878,6 +914,11 @@ SET IDENTITY_INSERT Team6.dbo.CarMaintenance OFF;
 GO
 SET IDENTITY_INSERT Team6.dbo.Bookings ON;
 GO
+
+
+
+-- Bookins for 5001
+
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
 (3000, 100, 'Booked', DATEADD(DAY, 20, CURRENT_TIMESTAMP), DATEADD(HOUR, 5, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), 5001);
@@ -886,9 +927,13 @@ UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY
 FROM Bookings
 WHERE BookingID=3000; 
 
+
 UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), BookingRating = 4, MeterEnd=10700
 FROM Bookings
 WHERE BookingID=3000;
+
+
+-- Bookins for 5002
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
@@ -906,266 +951,292 @@ INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, 
 VALUES
 (3002, 102, 'Booked', DATEADD(DAY, 25, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 25, CURRENT_TIMESTAMP)), 5002);
 
+
+UPDATE Team6.dbo.Bookings SET Status='Cancelled' FROM Bookings
+WHERE BookingID=3002; 
+
+
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3003, 101, 'Booked', DATEADD(DAY, 5, CURRENT_TIMESTAMP), DATEADD(HOUR, 4, DATEADD(DAY, 5, CURRENT_TIMESTAMP)), 5003);
+(3003, 104, 'Booked', DATEADD(DAY, 27, CURRENT_TIMESTAMP), DATEADD(HOUR, 4, DATEADD(DAY, 27, CURRENT_TIMESTAMP)), 5002);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 5, CURRENT_TIMESTAMP)
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 10, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3003; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 5 , CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=15400
-FROM Bookings
-WHERE BookingID=3003;
+
+-- Bookings for 5003
+
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3004, 103, 'Booked', DATEADD(DAY, 34, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), 5005);
+(3004, 101, 'Booked', DATEADD(DAY, 5, CURRENT_TIMESTAMP), DATEADD(HOUR, 4, DATEADD(DAY, 5, CURRENT_TIMESTAMP)), 5003);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 34, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 5, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3004; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=20380
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 5 , CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=15400
 FROM Bookings
 WHERE BookingID=3004;
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3005, 104, 'Booked', DATEADD(DAY, 27, CURRENT_TIMESTAMP), DATEADD(HOUR, 4, DATEADD(DAY, 27, CURRENT_TIMESTAMP)), 5002);
+(3005, 102, 'Booked', DATEADD(DAY, 30, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 30, CURRENT_TIMESTAMP)), 5003);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 10, CURRENT_TIMESTAMP)
-FROM Bookings
-WHERE BookingID=3005; 
+
+-- Bookings for 5004
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3006, 105, 'Booked', DATEADD(DAY, 6, CURRENT_TIMESTAMP), DATEADD(HOUR, 7, DATEADD(DAY, 6, CURRENT_TIMESTAMP)), 5006);
+(3006, 106, 'Booked', DATEADD(DAY, 45, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 45, CURRENT_TIMESTAMP)), 5004);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 6, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 45, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3006; 
 
-INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
-VALUES
-(3007, 106, 'Booked', DATEADD(DAY, 45, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 45, CURRENT_TIMESTAMP)), 5004);
-
-INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
-VALUES
-(3008, 102, 'Booked', DATEADD(DAY, 30, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 30, CURRENT_TIMESTAMP)), 5003);
-
-INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
-VALUES
-(3010, 107, 'Booked', DATEADD(DAY, 3, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 3, CURRENT_TIMESTAMP)), 5007);
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 45, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=8700
+FROM Bookings
+WHERE BookingID=3006;
 
 
-
-
-	-- CAR ID 5008
+-- Bookings for 5005
 
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3009, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5010);
+(3007, 103, 'Booked', DATEADD(DAY, 34, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), 5005);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 34, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3007; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 34, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=20380
+FROM Bookings
+WHERE BookingID=3007;
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3008, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5005);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3008; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 4, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=20500
+FROM Bookings
+WHERE BookingID=3008;
+
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3009, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5005);
 
 UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3009; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=20600
 FROM Bookings
 WHERE BookingID=3009;
 
 
------------------------------------
-
-
-GO
-SET IDENTITY_INSERT Team6.dbo.Bookings ON;
-GO
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3011, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5008);
+(3010, 102, 'Booked', DATEADD(DAY, 15, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 15, CURRENT_TIMESTAMP)), 5005);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 15, CURRENT_TIMESTAMP)
+FROM Bookings
+WHERE BookingID=3010; 
+
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 7, DATEADD(DAY, 15, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=20700
+FROM Bookings
+WHERE BookingID=3010;
+
+
+-- Bookings for 5006
+
+
+INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
+VALUES
+(3011, 105, 'Booked', DATEADD(DAY, 6, CURRENT_TIMESTAMP), DATEADD(HOUR, 7, DATEADD(DAY, 6, CURRENT_TIMESTAMP)), 5006);
+
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 6, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3011; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 7, DATEADD(DAY, 6, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=25777
 FROM Bookings
 WHERE BookingID=3011;
 
---------------------------------------
+-- Bookings for 5007
 
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3012, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5009);
+(3012, 107, 'Booked', DATEADD(DAY, 3, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 3, CURRENT_TIMESTAMP)), 5007);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
-FROM Bookings
-WHERE BookingID=3012; 
-
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 3, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3012;
 
-----------------------------------------------------
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 3, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=8100
+FROM Bookings
+WHERE BookingID=3012;
+
+
+-- Bookings for 5008
+
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3013, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5008);
+(3013, 106, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5008);
 
 UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3013; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 4, MeterEnd=1530
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), BookingRating = 4, MeterEnd=4600
 FROM Bookings
 WHERE BookingID=3013;
 
---------------------------------------------------
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3014, 109, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5009);
+(3014, 105, 'Booked', DATEADD(DAY, 16, CURRENT_TIMESTAMP), DATEADD(HOUR, 5, DATEADD(DAY, 16, CURRENT_TIMESTAMP)), 5008);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 16, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3014; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 8, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1556
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 6, DATEADD(DAY, 16, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=4800
 FROM Bookings
 WHERE BookingID=3014;
 
-------------------------------------------------------
-
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3015, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5008);
+(3015, 105, 'Booked', DATEADD(DAY, 18, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 18, CURRENT_TIMESTAMP)), 5008);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 18, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3015; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=1520
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 18, CURRENT_TIMESTAMP)), BookingRating = 4, MeterEnd=4866
 FROM Bookings
 WHERE BookingID=3015;
 
---------------------------------------------
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3016, 103, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5008);
+(3016, 103, 'Booked', DATEADD(DAY, 20, CURRENT_TIMESTAMP), DATEADD(HOUR, 4, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), 5008);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 20, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3016; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1520
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 4, DATEADD(DAY, 20, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=4900
 FROM Bookings
 WHERE BookingID=3016;
 
----------------------------------------------
+
+
+-- Bookings for 5009
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3017, 103, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+(3017, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5009);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3017; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 2, MeterEnd=1545
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=3750
 FROM Bookings
 WHERE BookingID=3017;
 
--------------------------------------------------
-
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3018, 103, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+(3018, 109, 'Booked', DATEADD(DAY, 14, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 14, CURRENT_TIMESTAMP)), 5009);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 14, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3018; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 4, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1542
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 14, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=3850
 FROM Bookings
 WHERE BookingID=3018;
 
--------------------------------------------------
-
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3019, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5005);
+(3019, 101, 'Booked', DATEADD(DAY, 15, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 15, CURRENT_TIMESTAMP)), 5009);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 15, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3019; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 4, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1542
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 6, DATEADD(DAY, 15, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=3950
 FROM Bookings
 WHERE BookingID=3019;
 
-------------------------------------------------
-
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3020, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5005);
+(3020, 109, 'Booked', DATEADD(DAY, 19, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 19, CURRENT_TIMESTAMP)), 5009);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 19, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3020; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 3, MeterEnd=1548
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 19, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=4000
 FROM Bookings
 WHERE BookingID=3020;
 
------------------------------------------------------
+
+-- Bookings for 5010
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3021, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5005);
+(3021, 101, 'Booked', DATEADD(DAY, 13, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), 5010);
 
 UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 13, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3021; 
 
---UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), MeterEnd=1548
---FROM Bookings
---WHERE BookingID=3021;
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 3, DATEADD(DAY, 13, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=66790
+FROM Bookings
+WHERE BookingID=3021;
 
----------------------------------------------
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3022, 101, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+(3022, 103, 'Booked', DATEADD(DAY, 16, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 16, CURRENT_TIMESTAMP)), 5010);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 16, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3022; 
 
---UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), MeterEnd=1548
---FROM Bookings
---WHERE BookingID=3021;
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 6, DATEADD(DAY, 16, CURRENT_TIMESTAMP)), BookingRating = 2, MeterEnd=66900
+FROM Bookings
+WHERE BookingID=3022;
+
 
 INSERT INTO Team6.dbo.Bookings(BookingID, CustomerID, Status, BookingStartTime, BookingEndTime, CarID)
 VALUES
-(3023, 105, 'Booked', DATEADD(DAY, 12, CURRENT_TIMESTAMP), DATEADD(HOUR, 6, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), 5010);
+(3023, 103, 'Booked', DATEADD(DAY, 19, CURRENT_TIMESTAMP), DATEADD(HOUR, 3, DATEADD(DAY, 19, CURRENT_TIMESTAMP)), 5010);
 
-UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 12, CURRENT_TIMESTAMP)
+UPDATE Team6.dbo.Bookings SET Status='InProgress', ActualStartTime = DATEADD(DAY, 19, CURRENT_TIMESTAMP)
 FROM Bookings
 WHERE BookingID=3023; 
 
-UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 5, DATEADD(DAY, 12, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=1548
+UPDATE Team6.dbo.Bookings SET Status='Completed', ActualEndTime = DATEADD(HOUR, 4, DATEADD(DAY, 19, CURRENT_TIMESTAMP)), BookingRating = 5, MeterEnd=67000
 FROM Bookings
 WHERE BookingID=3023;
 
 
+------------------------------------------------
 
-SELECT * FROM Bookings
+
 
 GO
 SET IDENTITY_INSERT Team6.dbo.Bookings OFF;
@@ -1204,6 +1275,8 @@ INSERT INTO Team6.dbo.CustomerService(ServiceID, ComplaintStatus, Rating, IssueT
 ',  DATEADD(HOUR, 8, getdate()), 3010, 1009);
 SET IDENTITY_INSERT Team6.dbo.CustomerService OFF;
 
+
+
 -- SELECT STATEMENTs 
 SELECT * from Bookings;
 SELECT * from Car;
@@ -1222,8 +1295,14 @@ SELECT * from Vendor;
 SELECT * from VendorTransactions;
 
 
--------------------------------------------------------------------------------------
----View to get number of cars  available for at a  Rental Location---------------------
+------------------------------------------------------------------------------------
+-- VIEWS
+------------------------------------------------------------------------------------
+
+
+/*
+ * View to get number of cars  available for at a  Rental Location
+ */
 
 
 CREATE VIEW view_NumberOfCarsAvailable
@@ -1238,64 +1317,43 @@ CREATE VIEW view_NumberOfCarsAvailable
 
 SELECT * FROM view_NumberOfCarsAvailable;
 
--- show no. of booking for a car in last 30 days
--- show relevant info for a car
-	-- show no. of bookings
-	-- show avg rating
-	-- show total miles
+/*
+ * View to show snapshot of the performance of a particular make for the last 30 days
+ */
+
+WITH TEMP AS (
+SELECT c.Make, c.Model as TopModels, COUNT(*) as TB, 
+AVG((b.MeterEnd - b.MeterStart)) as ADP, ROUND(AVG(p.BillingAmount), 2) as ARev, AVG(b.BookingRating) as ARating  FROM Car c 
+inner join Bookings b on b.CarId=c.CarId
+INNER join Payment p on p.PaymentID=b.PaymentID
+WHERE DATEDIFF(DAY, b.BookingStartTime, GETDATE()) < 30  
+GROUP by c.Make, c.Model
+)
+Select DISTINCT(Make), STUFF((select ', ' + CAST(t1.TopModels as VARCHAR) from TEMP t1 where t1.Make=t2.Make FOR XML PATH('')) , 1, 2, '') as TopModels, 
+SUM(TB) as TotalBookings, AVG(ADP) as AverageDistancePerTrip, AVG(ARev) as AverageRevenue, AVG(ARating) as AverageRating from TEMP t2
+GROUP BY Make
+ORDER by TotalBookings DESC
+
+/*
+ * View for Quarterly business revenue per rental location
+ */
+
+CREATE view view_Quarterly_Business_Revenue_per_location
+as
+select DISTINCT (rl.City + ', ' + rl.State) as RentalLocation, YEAR(p.ProcessedAt) as RevenueYear, DATEPART(QUARTER, p.ProcessedAt) as [Quarter], SUM(p.BillingAmount) as TotalRevenue
+from Bookings b
+JOIN Payment p
+ON b.PaymentId = p.PaymentID
+JOIN Car c
+on b.CarID = c.CarID
+JOIN RentalLocation rl
+ON c.RentalLocationID = rl.RentalLocationID
+WHERE p.PaymentStatus = 'COMPLETED'
+GROUP BY YEAR(p.ProcessedAt), DATEPART(QUARTER, p.ProcessedAt), rl.RentalLocationID, rl.City, rl.State
+
+SELECT * from view_Quarterly_Business_Revenue_per_location
+ORDER by TotalRevenue DESC;
 
 
----- View for checking number of bookings for a session ---- 
--- this can help car rental business for increasing or decreasing number of bookings being held per time period in order to increase profit
 
 
--- TODO:
-
--- USERAUTH
--- use HASHBYTES function to insert data  (https://www.mytecbits.com/microsoft/sql-server/sha-2-hashing) - completed
-
--- CARDETAILS
--- unique together on CardNumber and CustomerID - completed
--- cvv - encrypt - during insert
-
---CAR
--- make this a ercomputed column from Cartier - completed
--- update meterrating -> metrating + (meterend- meterstart) - completed
--- availability - complete
-
--- Renatl Location
--- current capacity - completed
-
-
--- BOOKINGS
--- trigger when inprogrss, get meterrating - completed
--- reduce miles for carmaintenance entity - completed
--- rentalamount - computed column - completed
--- penalty - create function -- actualendtime - bookingendtime * priceperhour or meterend - metertart * pricepermile - completed
--- create trigger to create paymentid - cancelled
-
--- Payment
--- Calculate Billing amount - completed
-
--- CArd Details
--- isprimary - unique for custid - completed
--- expirydate constarint should be more than 6 months - completed
-
--- Customer
--- License expiry - completed
--- isverified to false - function
-
--- Customer Membership
--- isactive- false if enddate > curr date
-
-
--- DATA insertion error
-	-- Carddetails- Customerid - check, unique
-	-- CUSTOMER - Emailid
-	-- Employee - emailid
-
-
-	--NEW TODO
-	-- car
-		-- isavailable change function to trigger
-	-- carddetails - isprimary
